@@ -31,13 +31,38 @@ function initDataDir() {
             author: "Admin",
             content: "欢迎来到 Bloret BBS！这是一个基于文件的论坛系统。",
             time: Date.now(),
-            tags: ["置顶", "公告"]
+            tags: ["置顶", "公告"],
+            likes: [], // 存储点赞用户名的数组
+            shares: 0
         }));
     }
 }
-initDataDir();
 
-// --- 路由: OAuth 登录 ---
+// 初始化用户数据目录
+function initUserDir() {
+    const userDir = path.join(config.data_dir, '..', 'users'); // data/users
+    if (!fs.existsSync(userDir)) {
+        fs.mkdirSync(userDir, { recursive: true });
+    }
+    return userDir;
+}
+
+initDataDir();
+const userDir = initUserDir();
+
+// 路由: 资源 public/res/*
+app.get('/res/*', (req, res) => {
+    const resourcePath = path.join(__dirname, 'public', req.path);
+    if (fs.existsSync(resourcePath)) {
+        res.sendFile(resourcePath);
+    } else {
+        res.status(404).send('资源未找到');
+    }
+});
+
+
+
+// 路由：OAuth 登录
 
 app.get('/login', (req, res) => {
     const authUrl = `${config.passport_host}/app/oauth?app_id=${config.app_id}&redirect_uri=${encodeURIComponent(config.callback_url)}`;
@@ -114,11 +139,87 @@ app.get('/api/posts', (req, res) => {
     const posts = files.map(file => {
         try {
             const content = JSON.parse(fs.readFileSync(path.join(dirPath, file), 'utf8'));
+            // 确保 likes 字段存在
+            if (!content.likes) content.likes = [];
+            if (!content.shares) content.shares = 0;
             return { filename: file, ...content };
         } catch (e) { return null; }
     }).filter(p => p !== null);
 
     res.json(posts);
+});
+
+// --- 新增 API: 点赞 ---
+app.post('/api/post/like', (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: '请先登录' });
+    const { board, section, filename } = req.body;
+    const filePath = path.join(config.data_dir, board, section, filename);
+    
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: '帖子不存在' });
+    
+    try {
+        const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        if (!content.likes) content.likes = [];
+        
+        const username = req.session.user.username;
+        const index = content.likes.indexOf(username);
+        
+        let liked = false;
+        if (index === -1) {
+            content.likes.push(username);
+            liked = true;
+        } else {
+            content.likes.splice(index, 1);
+            liked = false;
+        }
+        
+        fs.writeFileSync(filePath, JSON.stringify(content));
+        res.json({ success: true, liked, count: content.likes.length });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// --- 新增 API: 关注板块/分区 ---
+// 用户数据结构: data/users/username.json -> { following: { boards: [], sections: [] } }
+app.post('/api/user/follow', (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: '请先登录' });
+    const { type, target } = req.body; // type: 'board' or 'section', target: 'BoardName' or 'BoardName/SectionName'
+    const username = req.session.user.username;
+    const userFile = path.join(userDir, `${username}.json`);
+    
+    let userData = { following: { boards: [], sections: [] } };
+    if (fs.existsSync(userFile)) {
+        userData = JSON.parse(fs.readFileSync(userFile, 'utf8'));
+        if(!userData.following) userData.following = { boards: [], sections: [] };
+    }
+
+    const list = type === 'board' ? userData.following.boards : userData.following.sections;
+    const index = list.indexOf(target);
+    let isFollowing = false;
+
+    if (index === -1) {
+        list.push(target);
+        isFollowing = true;
+    } else {
+        list.splice(index, 1);
+        isFollowing = false;
+    }
+
+    fs.writeFileSync(userFile, JSON.stringify(userData));
+    res.json({ success: true, isFollowing });
+});
+
+// 获取用户关注状态
+app.get('/api/user/follows', (req, res) => {
+    if (!req.session.user) return res.json({ boards: [], sections: [] });
+    const userFile = path.join(userDir, `${req.session.user.username}.json`);
+    if (fs.existsSync(userFile)) {
+        const data = JSON.parse(fs.readFileSync(userFile, 'utf8'));
+        res.json(data.following || { boards: [], sections: [] });
+    } else {
+        res.json({ boards: [], sections: [] });
+    }
 });
 
 // 获取板块信息（包含所有者）

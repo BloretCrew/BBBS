@@ -1,13 +1,41 @@
 let currentUser = null;
 let boardStructure = {};
 let currentView = 'today';
+let currentActiveBoard = null;
+let userFollows = { boards: [], sections: [] };
 
 // 初始化
 document.addEventListener('DOMContentLoaded', async () => {
     await checkLogin();
+    if(currentUser) await loadFollows();
     await loadStructure();
     loadPage('today');
 });
+
+// 动画过渡辅助函数
+async function transitionTo(renderFn) {
+    const container = document.getElementById('main-container');
+    container.style.opacity = '0';
+    container.style.transform = 'translateY(10px)';
+    container.style.transition = 'opacity 0.2s, transform 0.2s';
+    
+    await new Promise(r => setTimeout(r, 200));
+    await renderFn();
+
+    container.style.opacity = '0';
+    container.style.transform = 'translateY(10px)';
+    
+    requestAnimationFrame(() => {
+        container.style.opacity = '1';
+        container.style.transform = 'translateY(0)';
+    });
+}
+
+// 加载用户关注列表
+async function loadFollows() {
+    const res = await fetch('/api/user/follows');
+    userFollows = await res.json();
+}
 
 // 检查登录状态
 async function checkLogin() {
@@ -44,14 +72,17 @@ function renderSidebarBoards() {
     container.innerHTML = '';
     
     for (const [board, sections] of Object.entries(boardStructure)) {
-        // 板块标题
         const boardEl = document.createElement('div');
         boardEl.className = 'nav-item';
         boardEl.innerHTML = `<span class="nav-icon">📁</span> ${board}`;
-        boardEl.onclick = () => toggleSections(board);
+        boardEl.onclick = (e) => {
+            loadBoard(board);
+            toggleSections(board, true);
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            boardEl.classList.add('active');
+        };
         container.appendChild(boardEl);
 
-        // 分区 (默认隐藏或缩进)
         const sectionContainer = document.createElement('div');
         sectionContainer.id = `group-${board}`;
         sectionContainer.style.display = 'none';
@@ -69,106 +100,254 @@ function renderSidebarBoards() {
     }
 }
 
-function toggleSections(board) {
+function toggleSections(board, forceOpen = false) {
     const el = document.getElementById(`group-${board}`);
-    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    if (forceOpen) el.style.display = 'block';
+    else el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function loadBoard(board) {
+    currentActiveBoard = board;
+    await transitionTo(async () => {
+        const container = document.getElementById('main-container');
+        const sections = boardStructure[board] || [];
+        const isFollowed = userFollows.boards.includes(board);
+        
+        container.innerHTML = `
+            <div class="hero-section">
+                <span class="section-date">板块目录</span>
+                <div class="section-header" style="padding:0; margin-bottom: 30px; align-items: center;">
+                    <div class="section-title">${board}</div>
+                    <button class="follow-btn ${isFollowed ? 'active' : ''}" onclick="toggleFollow('board', '${board}', this)">
+                        ${isFollowed ? '已关注' : '+ 关注板块'}
+                    </button>
+                </div>
+                
+                <div class="nav-title" style="margin-bottom: 15px;">全部分区</div>
+                <div class="card-grid">
+                    ${sections.map(sec => `
+                        <div class="fluent-card" onclick="loadPosts('${board}', '${sec}')" style="height: 180px; background: white;">
+                            <div style="padding: 20px;">
+                                <div class="card-category">Section</div>
+                                <div class="card-title" style="color: #000; font-size: 24px;">${sec}</div>
+                                <div class="card-desc" style="color: #666;">点击进入分区查看帖子</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+        
+        const infoRes = await fetch(`/api/board/info?board=${encodeURIComponent(board)}`);
+        const info = await infoRes.json();
+        document.getElementById('menu-new-section').style.display = (currentUser && info.owner === currentUser.username) ? 'flex' : 'none';
+    });
 }
 
 // 页面渲染逻辑
 async function loadPage(pageType) {
-    const container = document.getElementById('main-container');
-    container.innerHTML = '';
     currentView = pageType;
-
-    // 清除侧边栏高亮
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
 
-    if (pageType === 'today') {
-        const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-        
-        container.innerHTML = `
-            <div class="hero-section">
-                <span class="section-date">${today}</span>
-                <div class="section-header" style="padding:0; margin-bottom: 20px;">
-                    <div class="section-title">Today</div>
-                </div>
-            </div>
-            <div class="card-grid" id="featured-grid">
-                <!-- 占位符 -->
-                <div class="fluent-card" style="background: linear-gradient(45deg, #ff9a9e 0%, #fad0c4 99%, #fad0c4 100%);">
-                    <div class="card-overlay">
-                        <div class="card-category">欢迎</div>
-                        <div class="card-title">Bloret BBS 全新上线</div>
-                        <div class="card-desc">探索 Microsoft Fluent Design 设计风格的现代论坛体验。</div>
+    await transitionTo(async () => {
+        const container = document.getElementById('main-container');
+        container.innerHTML = '';
+
+        if (pageType === 'today') {
+            const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+            
+            container.innerHTML = `
+                <div class="hero-section">
+                    <span class="section-date">${today}</span>
+                    <div class="section-header" style="padding:0; margin-bottom: 20px;">
+                        <div class="section-title">Today</div>
                     </div>
                 </div>
-                 <div class="fluent-card" style="background-image: url('https://picsum.photos/800/600');">
-                    <div class="card-overlay">
-                        <div class="card-category">推荐</div>
-                        <div class="card-title">摄影精选</div>
-                        <div class="card-desc">查看本周最热门的摄影作品。</div>
+                <div class="card-grid" id="featured-grid">
+                    <div class="fluent-card" style="background: linear-gradient(45deg, #ff9a9e 0%, #fad0c4 99%, #fad0c4 100%);">
+                        <div class="card-overlay">
+                            <div class="card-category">欢迎</div>
+                            <div class="card-title">Bloret BBS 全新上线</div>
+                            <div class="card-desc">探索 Microsoft Fluent Design 设计风格的现代论坛体验。</div>
+                        </div>
+                    </div>
+                    <div class="fluent-card" style="background-image: url('https://picsum.photos/800/600');">
+                        <div class="card-overlay">
+                            <div class="card-category">推荐</div>
+                            <div class="card-title">摄影精选</div>
+                            <div class="card-desc">查看本周最热门的摄影作品。</div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `;
-    }
-}
-
-async function loadPosts(board, section) {
-    const container = document.getElementById('main-container');
-    container.innerHTML = `<div style="padding:40px;"><h2>${section} <span style="font-size:14px; color:#888;">${board}</span></h2><div class="list-view" id="post-list">加载中...</div></div>`;
-    
-    const res = await fetch(`/api/posts?board=${encodeURIComponent(board)}&section=${encodeURIComponent(section)}`);
-    const posts = await res.json();
-    
-    const list = document.getElementById('post-list');
-    list.innerHTML = '';
-
-    if(posts.length === 0) {
-        list.innerHTML = '<div style="text-align:center; color:#888;">暂无帖子</div>';
-        return;
-    }
-
-    posts.forEach(post => {
-        const item = document.createElement('div');
-        item.className = 'list-item';
-        item.onclick = () => showPostDetail(post);
-        item.innerHTML = `
-            <div class="list-icon">📝</div>
-            <div class="list-details">
-                <div class="list-title">${post.title}</div>
-                <div class="list-subtitle">${post.author} • ${new Date(post.time).toLocaleDateString()}</div>
-            </div>
-            <button class="btn-get">查看</button>
-        `;
-        list.appendChild(item);
+            `;
+        }
     });
 }
 
-function showPostDetail(post) {
-    const container = document.getElementById('main-container');
-    // 简单的 Markdown 渲染
-    const htmlContent = marked.parse(post.content);
+async function loadPosts(board, section) {
+    currentActiveBoard = board;
     
-    container.innerHTML = `
-        <div class="post-detail-container">
-            <div class="back-btn" onclick="loadPosts('x', 'x')">← 返回列表</div> <!-- 简化逻辑，实际应记录上一级 -->
-            <div class="post-detail-title">${post.title}</div>
-            <div class="post-meta">
-                <span>👤 ${post.author}</span>
-                <span style="margin: 0 10px;">•</span>
-                <span>🕒 ${new Date(post.time).toLocaleString()}</span>
+    await transitionTo(async () => {
+        const container = document.getElementById('main-container');
+        const target = `${board}/${section}`;
+        const isFollowed = userFollows.sections.includes(target);
+
+        container.innerHTML = `
+            <div style="padding:40px;">
+                <div class="back-btn" onclick="loadBoard('${board}')">← 返回 ${board}</div>
+                <div class="section-header" style="padding:0; margin-bottom: 20px; align-items: center;">
+                    <div class="section-title">${section}</div>
+                    <button class="follow-btn ${isFollowed ? 'active' : ''}" onclick="toggleFollow('section', '${target}', this)">
+                        ${isFollowed ? '已关注' : '+ 关注分区'}
+                    </button>
+                </div>
+                <div class="card-grid" id="top-posts-grid" style="margin-bottom: 30px; padding: 0;"></div>
+                <div class="nav-title" style="margin-bottom: 15px;">所有帖子</div>
+                <div class="list-view" id="post-list">加载中...</div>
             </div>
-            <div class="post-body">
-                ${htmlContent}
-            </div>
-        </div>
-    `;
+        `;
+
+        const infoRes = await fetch(`/api/board/info?board=${encodeURIComponent(board)}`);
+        const info = await infoRes.json();
+        document.getElementById('menu-new-section').style.display = (currentUser && info.owner === currentUser.username) ? 'flex' : 'none';
+
+        const res = await fetch(`/api/posts?board=${encodeURIComponent(board)}&section=${encodeURIComponent(section)}`);
+        const posts = await res.json();
+        const list = document.getElementById('post-list');
+        const grid = document.getElementById('top-posts-grid');
+        
+        list.innerHTML = '';
+        if(posts.length === 0) { 
+            list.innerHTML = '<div style="text-align:center; color:#888;">暂无帖子</div>'; 
+            return; 
+        }
+
+        posts.sort((a, b) => (b.likes ? b.likes.length : 0) - (a.likes ? a.likes.length : 0));
+
+        if (posts.length > 0 && posts[0].likes && posts[0].likes.length > 0) {
+            const topPost = posts[0];
+            grid.innerHTML = `
+                <div class="fluent-card highlight-post" onclick="showPostDetailWrapper('${topPost.filename}', '${board}', '${section}')">
+                    <div class="card-overlay">
+                        <div class="card-category">🔥 热门推荐 • ${topPost.likes.length} 人点赞</div>
+                        <div class="card-title">${topPost.title}</div>
+                        <div class="card-desc">${topPost.author} 发布于 ${new Date(topPost.time).toLocaleDateString()}</div>
+                    </div>
+                </div>
+            `;
+        } else {
+            grid.style.display = 'none';
+        }
+
+        posts.forEach(post => {
+            const item = document.createElement('div');
+            item.className = 'list-item';
+            item.onclick = () => showPostDetail(post, board, section);
+            item.innerHTML = `
+                <div class="list-icon">📝</div>
+                <div class="list-details">
+                    <div class="list-title">${post.title}</div>
+                    <div class="list-subtitle">${post.author} • ${post.likes ? post.likes.length : 0} 👍</div>
+                </div>
+                <button class="btn-get">查看</button>`;
+            list.appendChild(item);
+        });
+    });
 }
 
-// --- 发帖逻辑 ---
+async function showPostDetailWrapper(filename, board, section) {
+    const res = await fetch(`/api/posts?board=${encodeURIComponent(board)}&section=${encodeURIComponent(section)}`);
+    const posts = await res.json();
+    const post = posts.find(p => p.filename === filename);
+    if(post) showPostDetail(post, board, section);
+}
 
-let currentActiveBoard = null;
+function showPostDetail(post, board, section) {
+    transitionTo(async () => {
+        const container = document.getElementById('main-container');
+        const htmlContent = marked.parse(post.content);
+        
+        const isLiked = currentUser && post.likes && post.likes.includes(currentUser.username);
+        const likeCount = post.likes ? post.likes.length : 0;
+
+        container.innerHTML = `
+            <div class="post-detail-container">
+                <div class="back-btn" onclick="loadPosts('${board}', '${section}')">← 返回分区</div>
+                <div class="post-detail-title">${post.title}</div>
+                <div class="post-meta">
+                    <span>👤 ${post.author}</span>
+                    <span style="margin: 0 10px;">•</span>
+                    <span>🕒 ${new Date(post.time).toLocaleString()}</span>
+                </div>
+                <div class="post-body">${htmlContent}</div>
+                <div class="action-bar">
+                    <button class="action-btn ${isLiked ? 'active' : ''}" onclick="toggleLike('${board}', '${section}', '${post.filename}', this)">
+                        <span>${isLiked ? '❤️' : '🤍'}</span> 
+                        <span class="like-count">${likeCount}</span>
+                    </button>
+                    <button class="action-btn share" onclick="sharePost(this)">
+                        <span>🔗</span> 分享
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+}
+
+async function toggleLike(board, section, filename, btn) {
+    if(!currentUser) return alert('请先登录');
+    const res = await fetch('/api/post/like', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ board, section, filename })
+    });
+    const data = await res.json();
+    if(data.success) {
+        const countSpan = btn.querySelector('.like-count');
+        const iconSpan = btn.querySelector('span:first-child');
+        countSpan.innerText = data.count;
+        if(data.liked) {
+            btn.classList.add('active');
+            iconSpan.innerText = '❤️';
+        } else {
+            btn.classList.remove('active');
+            iconSpan.innerText = '🤍';
+        }
+    } else { alert(data.error); }
+}
+
+function sharePost(btn) {
+    const url = window.location.href;
+    navigator.clipboard.writeText(url).then(() => {
+        const original = btn.innerHTML;
+        btn.innerHTML = '<span>✅</span> 已复制';
+        setTimeout(() => btn.innerHTML = original, 2000);
+    });
+}
+
+async function toggleFollow(type, target, btn) {
+    if(!currentUser) return alert('请先登录');
+    const res = await fetch('/api/user/follow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, target })
+    });
+    const data = await res.json();
+    if(data.success) {
+        if(data.isFollowing) {
+            btn.classList.add('active');
+            btn.innerText = '已关注';
+            if(type === 'board') userFollows.boards.push(target);
+            else userFollows.sections.push(target);
+        } else {
+            btn.classList.remove('active');
+            btn.innerText = type === 'board' ? '+ 关注板块' : '+ 关注分区';
+            const list = type === 'board' ? userFollows.boards : userFollows.sections;
+            const idx = list.indexOf(target);
+            if(idx > -1) list.splice(idx, 1);
+        }
+    } else { alert(data.error); }
+}
 
 function toggleNewMenu() {
     const menu = document.getElementById('new-menu');
@@ -201,30 +380,6 @@ function showPostModal() {
     updateSectionSelect();
 }
 
-async function loadPosts(board, section) {
-    currentActiveBoard = board;
-    const container = document.getElementById('main-container');
-    container.innerHTML = `<div style="padding:40px;"><h2>${section} <span style="font-size:14px; color:#888;">${board}</span></h2><div class="list-view" id="post-list">加载中...</div></div>`;
-    
-    // 检查所有权以显示新建分区按钮
-    const infoRes = await fetch(`/api/board/info?board=${encodeURIComponent(board)}`);
-    const info = await infoRes.json();
-    document.getElementById('menu-new-section').style.display = (currentUser && info.owner === currentUser.username) ? 'block' : 'none';
-
-    const res = await fetch(`/api/posts?board=${encodeURIComponent(board)}&section=${encodeURIComponent(section)}`);
-    const posts = await res.json();
-    const list = document.getElementById('post-list');
-    list.innerHTML = '';
-    if(posts.length === 0) { list.innerHTML = '<div style="text-align:center; color:#888;">暂无帖子</div>'; return; }
-    posts.forEach(post => {
-        const item = document.createElement('div');
-        item.className = 'list-item';
-        item.onclick = () => showPostDetail(post);
-        item.innerHTML = `<div class="list-icon">📝</div><div class="list-details"><div class="list-title">${post.title}</div><div class="list-subtitle">${post.author} • ${new Date(post.time).toLocaleDateString()}</div></div><button class="btn-get">查看</button>`;
-        list.appendChild(item);
-    });
-}
-
 async function submitBoard() {
     const name = document.getElementById('board-name').value;
     if(!name) return;
@@ -251,7 +406,6 @@ function updateSectionSelect() {
     const board = document.getElementById('post-board-select').value;
     const sectionSelect = document.getElementById('post-section-select');
     sectionSelect.innerHTML = '';
-    
     if(board && boardStructure[board]) {
         boardStructure[board].forEach(sec => {
             sectionSelect.innerHTML += `<option value="${sec}">${sec}</option>`;
@@ -259,61 +413,39 @@ function updateSectionSelect() {
     }
 }
 
+async function handleAutoUpload(input) {
+    if (!input.files || !input.files[0]) return;
+    const file = input.files[0];
+    const formData = new FormData();
+    formData.append('image', file);
+    const upRes = await fetch('/api/upload-proxy', { method: 'POST', body: formData });
+    const upData = await upRes.json();
+    if (upData.success) {
+        const textarea = document.getElementById('post-content');
+        textarea.value += `\n![${file.name}](${config.image_host}${upData.data.url})\n`;
+        input.value = '';
+    } else { alert('上传失败: ' + upData.message); }
+}
+
 async function submitPost() {
     const board = document.getElementById('post-board-select').value;
     const section = document.getElementById('post-section-select').value;
     const title = document.getElementById('post-title').value;
-    let content = document.getElementById('post-content').value;
-    const fileInput = document.getElementById('post-image');
-
-    if(!board || !section || !title || !content) {
-        alert('请填写完整信息');
-        return;
-    }
-
-    // 处理图片上传
-    if(fileInput.files.length > 0) {
-        const formData = new FormData();
-        formData.append('image', fileInput.files[0]);
-        
-        try {
-            const upRes = await fetch('/api/upload-proxy', {
-                method: 'POST',
-                body: formData
-            });
-            const upData = await upRes.json();
-            if(upData.success) {
-                // 将图片插入内容末尾
-                content += `\n\n![Image](${config.image_host}${upData.data.url})`;
-            } else {
-                alert('图片上传失败: ' + upData.message);
-                return;
-            }
-        } catch(e) {
-            console.error(e);
-            alert('图片上传出错');
-            return;
-        }
-    }
-
-    // 提交帖子
+    const content = document.getElementById('post-content').value;
+    if (!board || !section || !title || !content) { alert('请填写完整信息'); return; }
     const res = await fetch('/api/post', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ board, section, title, content })
     });
-
     const result = await res.json();
-    if(result.success) {
-        closePostModal();
+    if (result.success) {
+        closeModal('post-modal');
+        document.getElementById('post-title').value = '';
+        document.getElementById('post-content').value = '';
         alert('发布成功！');
         loadPosts(board, section);
-    } else {
-        alert('发布失败: ' + result.error);
-    }
+    } else { alert('发布失败: ' + result.error); }
 }
 
-// 注入配置给前端 (简单处理)
-const config = {
-    image_host: "http://pcfs.eno.ink:28888" 
-};
+const config = { image_host: "http://pcfs.eno.ink:28888" };
