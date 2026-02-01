@@ -463,7 +463,9 @@ app.get('/api/search', (req, res) => {
                         results.posts.push({
                             board, section, filename: file,
                             title: content.title, author: content.author,
-                            time: content.time, preview: content.content.substring(0, 50) + "..."
+                            time: content.time, 
+                            preview: content.content.substring(0, 50) + "...",
+                            content: content.content // 必须包含此项，否则前端提取图片会崩溃
                         });
                     }
                 } catch (e) {}

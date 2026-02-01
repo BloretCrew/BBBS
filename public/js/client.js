@@ -144,6 +144,7 @@ function toggleSections(board, forceOpen = false) {
 }
 
 function extractFirstImage(content) {
+    if (!content) return null; // 防御性检查，防止 content 为空时崩溃
     const imgRegex = /!\[.*?\]\((.*?)\)/;
     const match = content.match(imgRegex);
     return match ? match[1] : null;
@@ -704,8 +705,11 @@ async function handleSearchSuggest(q) {
 
 // 执行完整搜索页渲染
 async function executeFullSearch(q) {
-    if (!q.trim()) return;
-    document.getElementById('search-suggest-box').style.display = 'none';
+    if (!q || !q.trim()) return;
+    // 隐藏建议框并清空输入框焦点
+    const suggestBox = document.getElementById('search-suggest-box');
+    if(suggestBox) suggestBox.style.display = 'none';
+    document.getElementById('global-search').blur();
     
     await transitionTo(async () => {
         const container = document.getElementById('main-container');
