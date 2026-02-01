@@ -421,45 +421,66 @@ app.post('/api/post', (req, res) => {
     res.json({ success: true, filename });
 });
 
-// --- 新增 API: 全局搜索 ---
+// --- 完善 API: 全局深度搜索 ---
 app.get('/api/search', (req, res) => {
     const { q } = req.query;
     if (!q) return res.status(400).json({ error: '缺少搜索关键词' });
+    const query = q.toLowerCase();
 
-    let results = [];
+    let results = {
+        posts: [],
+        users: [],
+        boards: [],
+        sections: []
+    };
+
+    // 1. 搜索板块与分区
     const boards = fs.readdirSync(config.data_dir);
-    
     boards.forEach(board => {
         const boardPath = path.join(config.data_dir, board);
         if (!fs.statSync(boardPath).isDirectory()) return;
-        const sections = fs.readdirSync(boardPath);
         
+        if (board.toLowerCase().includes(query)) {
+            results.boards.push({ name: board });
+        }
+
+        const sections = fs.readdirSync(boardPath);
         sections.forEach(section => {
             const sectionPath = path.join(boardPath, section);
             if (!fs.statSync(sectionPath).isDirectory()) return;
-            const files = fs.readdirSync(sectionPath);
             
+            if (section.toLowerCase().includes(query)) {
+                results.sections.push({ name: section, board: board });
+            }
+
+            // 2. 搜索帖子
+            const files = fs.readdirSync(sectionPath);
             files.forEach(file => {
                 if (!file.endsWith('.json') || file === 'owner.json') return;
                 try {
                     const content = JSON.parse(fs.readFileSync(path.join(sectionPath, file), 'utf8'));
-                    // 简单的关键词匹配 (标题或内容)
-                    if (content.title.includes(q) || content.content.includes(q)) {
-                        results.push({
-                            board,
-                            section,
-                            filename: file,
-                            title: content.title,
-                            author: content.author,
-                            time: content.time,
-                            preview: content.content.substring(0, 100) + '...',
-                            likes: content.likes ? content.likes.length : 0
+                    if (content.title.toLowerCase().includes(query) || content.content.toLowerCase().includes(query)) {
+                        results.posts.push({
+                            board, section, filename: file,
+                            title: content.title, author: content.author,
+                            time: content.time, preview: content.content.substring(0, 50) + "..."
                         });
                     }
                 } catch (e) {}
             });
         });
     });
+
+    // 3. 搜索用户
+    if (fs.existsSync(userDir)) {
+        const userFiles = fs.readdirSync(userDir);
+        userFiles.forEach(file => {
+            const username = file.replace('.json', '');
+            if (username.toLowerCase().includes(query)) {
+                results.users.push({ username });
+            }
+        });
+    }
 
     res.json(results);
 });

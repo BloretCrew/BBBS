@@ -14,8 +14,12 @@
             <img src="/res/bloret.png" style="width: 32px; height: 32px; border-radius: 6px;">
             <span style="font-size: 20px; font-weight: 700; color: #1d1d1f;">百络谷</span>
         </div>
-        <div class="search-container">
-            <input type="text" class="search-input" placeholder="搜索帖子、用户...">
+        <div class="search-container" style="position: relative;">
+            <input type="text" class="search-input" id="global-search" placeholder="搜索内容、用户、板块..." oninput="handleSearchSuggest(this.value)" onkeydown="if(event.key==='Enter') executeFullSearch(this.value)">
+            <!-- 搜索联想气泡 -->
+            <div id="search-suggest-box" class="bubble-menu" style="display: none; top: 40px; left: 10px; right: 10px; width: auto; min-width: 0;">
+                <!-- 动态填充结果 -->
+            </div>
         </div>
 
         <div class="nav-group">

@@ -10,6 +10,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     if(currentUser) await loadFollows();
     await loadStructure();
     loadPage('today');
+
+    // 点击页面其他地方关闭搜索下拉框
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.search-container')) {
+            document.getElementById('search-suggest-box').style.display = 'none';
+        }
+    });
 });
 
 // 动画过渡辅助函数
@@ -661,6 +668,84 @@ async function submitPost() {
         // alert('发布成功！');
         loadPosts(board, section);
     } else { alert('发布失败: ' + result.error); }
+}
+
+// 处理搜索建议
+async function handleSearchSuggest(q) {
+    const box = document.getElementById('search-suggest-box');
+    if (!q.trim()) {
+        box.style.display = 'none';
+        return;
+    }
+
+    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    
+    // 合并结果展示在气泡中（取前8条）
+    let combined = [
+        ...data.users.slice(0, 2).map(u => ({ type: '👤', name: u.username, action: `alert('用户资料开发中')` })),
+        ...data.boards.slice(0, 2).map(b => ({ type: '📁', name: b.name, action: `loadBoard('${b.name}')` })),
+        ...data.sections.slice(0, 2).map(s => ({ type: '📍', name: s.name, action: `loadPosts('${s.board}', '${s.name}')` })),
+        ...data.posts.slice(0, 4).map(p => ({ type: '📝', name: p.title, action: `showPostDetailWrapper('${p.filename}', '${p.board}', '${p.section}')` }))
+    ];
+
+    if (combined.length === 0) {
+        box.innerHTML = '<div class="bubble-item" style="color:#999; font-size:13px;">未找到相关内容</div>';
+    } else {
+        box.innerHTML = combined.map(item => `
+            <div class="bubble-item" onclick="${item.action}; document.getElementById('search-suggest-box').style.display='none';">
+                <span class="bubble-icon" style="font-size:14px; width:20px;">${item.type}</span>
+                <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item.name}</span>
+            </div>
+        `).join('') + `<div class="bubble-item" style="border-top:1px solid #eee; font-size:12px; color:var(--primary-color); justify-content:center;" onclick="executeFullSearch('${q}')">查看全部结果 (Enter)</div>`;
+    }
+    box.style.display = 'flex';
+}
+
+// 执行完整搜索页渲染
+async function executeFullSearch(q) {
+    if (!q.trim()) return;
+    document.getElementById('search-suggest-box').style.display = 'none';
+    
+    await transitionTo(async () => {
+        const container = document.getElementById('main-container');
+        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+
+        container.innerHTML = `
+            <div class="hero-section">
+                <span class="section-date">搜索结果</span>
+                <div class="section-title">"${q}"</div>
+                
+                ${data.users.length ? `
+                    <div class="nav-title" style="margin-top:30px;">用户</div>
+                    <div class="list-view">${data.users.map(u => `<div class="list-item"><div class="list-icon">👤</div><div class="list-details"><b>${u.username}</b></div><button class="btn-get">主页</button></div>`).join('')}</div>
+                ` : ''}
+
+                ${data.boards.length || data.sections.length ? `
+                    <div class="nav-title" style="margin-top:30px;">板块与分区</div>
+                    <div class="card-grid">
+                        ${data.boards.map(b => `
+                            <div class="fluent-card" style="height:120px; background:#fff;" onclick="loadBoard('${b.name}')">
+                                <div style="padding:15px;"><div class="card-category">板块</div><div class="card-title" style="color:#000; font-size:18px;">${b.name}</div></div>
+                            </div>
+                        `).join('')}
+                        ${data.sections.map(s => `
+                            <div class="fluent-card" style="height:120px; background:#fff;" onclick="loadPosts('${s.board}', '${s.name}')">
+                                <div style="padding:15px;"><div class="card-category">分区 @ ${s.board}</div><div class="card-title" style="color:#000; font-size:18px;">${s.name}</div></div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+
+                <div class="nav-title" style="margin-top:30px;">帖子 (${data.posts.length})</div>
+                <div class="card-grid">
+                    ${data.posts.map(p => createPostCardHTML(p)).join('')}
+                </div>
+                ${data.posts.length === 0 && !data.users.length ? '<div style="padding:50px; text-align:center; color:#999;">空空如也</div>' : ''}
+            </div>
+        `;
+    });
 }
 
 const config = { image_host: "http://pcfs.eno.ink:28888" };
