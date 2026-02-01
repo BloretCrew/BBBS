@@ -421,6 +421,125 @@ app.post('/api/post', (req, res) => {
     res.json({ success: true, filename });
 });
 
+// --- 新增 API: 全局搜索 ---
+app.get('/api/search', (req, res) => {
+    const { q } = req.query;
+    if (!q) return res.status(400).json({ error: '缺少搜索关键词' });
+
+    let results = [];
+    const boards = fs.readdirSync(config.data_dir);
+    
+    boards.forEach(board => {
+        const boardPath = path.join(config.data_dir, board);
+        if (!fs.statSync(boardPath).isDirectory()) return;
+        const sections = fs.readdirSync(boardPath);
+        
+        sections.forEach(section => {
+            const sectionPath = path.join(boardPath, section);
+            if (!fs.statSync(sectionPath).isDirectory()) return;
+            const files = fs.readdirSync(sectionPath);
+            
+            files.forEach(file => {
+                if (!file.endsWith('.json') || file === 'owner.json') return;
+                try {
+                    const content = JSON.parse(fs.readFileSync(path.join(sectionPath, file), 'utf8'));
+                    // 简单的关键词匹配 (标题或内容)
+                    if (content.title.includes(q) || content.content.includes(q)) {
+                        results.push({
+                            board,
+                            section,
+                            filename: file,
+                            title: content.title,
+                            author: content.author,
+                            time: content.time,
+                            preview: content.content.substring(0, 100) + '...',
+                            likes: content.likes ? content.likes.length : 0
+                        });
+                    }
+                } catch (e) {}
+            });
+        });
+    });
+
+    res.json(results);
+});
+
+// --- 新增 API: 用户公开资料与统计 ---
+app.get('/api/user/profile/:username', (req, res) => {
+    const targetUser = req.params.username;
+    let stats = {
+        username: targetUser,
+        postCount: 0,
+        receivedLikes: 0,
+        recentPosts: []
+    };
+
+    const boards = fs.readdirSync(config.data_dir);
+    boards.forEach(board => {
+        const boardPath = path.join(config.data_dir, board);
+        if (!fs.statSync(boardPath).isDirectory()) return;
+        fs.readdirSync(boardPath).forEach(section => {
+            const sectionPath = path.join(boardPath, section);
+            if (!fs.statSync(sectionPath).isDirectory()) return;
+            fs.readdirSync(sectionPath).forEach(file => {
+                if (!file.endsWith('.json') || file === 'owner.json') return;
+                try {
+                    const p = JSON.parse(fs.readFileSync(path.join(sectionPath, file), 'utf8'));
+                    if (p.author === targetUser) {
+                        stats.postCount++;
+                        if (p.likes) stats.receivedLikes += p.likes.length;
+                        stats.recentPosts.push({
+                            title: p.title,
+                            board,
+                            section,
+                            time: p.time
+                        });
+                    }
+                } catch (e) {}
+            });
+        });
+    });
+
+    // 按时间倒序，只保留最近5条
+    stats.recentPosts.sort((a, b) => b.time - a.time);
+    stats.recentPosts = stats.recentPosts.slice(0, 5);
+
+    res.json(stats);
+});
+
+// --- 新增 API: 系统状态 ---
+app.get('/api/system/stats', (req, res) => {
+    let totalPosts = 0;
+    let totalBoards = 0;
+    let totalSections = 0;
+
+    const boards = fs.readdirSync(config.data_dir);
+    totalBoards = boards.filter(b => fs.statSync(path.join(config.data_dir, b)).isDirectory()).length;
+
+    boards.forEach(board => {
+        const boardPath = path.join(config.data_dir, board);
+        if (!fs.statSync(boardPath).isDirectory()) return;
+        const sections = fs.readdirSync(boardPath).filter(s => fs.statSync(path.join(boardPath, s)).isDirectory());
+        totalSections += sections.length;
+        
+        sections.forEach(section => {
+            const files = fs.readdirSync(path.join(boardPath, section));
+            totalPosts += files.filter(f => f.endsWith('.json') && f !== 'owner.json').length;
+        });
+    });
+
+    res.json({
+        version: "1.0.0",
+        powered_by: "Bloret BBS",
+        stats: {
+            boards: totalBoards,
+            sections: totalSections,
+            posts: totalPosts
+        },
+        server_time: Date.now()
+    });
+});
+
 // --- 路由: 图片上传代理 ---
 app.post('/api/upload-proxy', upload.single('image'), async (req, res) => {
     if (!req.file) return res.status(400).json({ success: false, message: "No file" });
