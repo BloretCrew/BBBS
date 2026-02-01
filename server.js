@@ -266,16 +266,85 @@ app.get('/api/user/follows', (req, res) => {
     }
 });
 
-// 获取板块信息（包含所有者）
-app.get('/api/board/info', (req, res) => {
+// 获取板块/分区完整管理信息
+app.get('/api/board/manage-info', (req, res) => {
     const { board } = req.query;
-    if (!board) return res.status(400).json({ error: 'Missing board' });
-    const ownerFile = path.join(config.data_dir, board, 'owner.json');
-    if (fs.existsSync(ownerFile)) {
-        res.json(JSON.parse(fs.readFileSync(ownerFile, 'utf8')));
-    } else {
-        res.json({ owner: 'system' });
+    const infoFile = path.join(config.data_dir, board, 'owner.json');
+    if (!fs.existsSync(infoFile)) return res.json({ owner: 'system', blacklist: [], sectionAdmins: {}, sectionSettings: {}, muted: false });
+    res.json(JSON.parse(fs.readFileSync(infoFile, 'utf8')));
+});
+
+// 统一管理 API
+app.post('/api/manage/update', (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: '请先登录' });
+    const { board, section, action, data } = req.body;
+    const infoFile = path.join(config.data_dir, board, 'owner.json');
+    if (!fs.existsSync(infoFile)) return res.status(404).json({ error: '板块配置不存在' });
+
+    let info = JSON.parse(fs.readFileSync(infoFile, 'utf8'));
+    const isOwner = info.owner === req.session.user.username;
+    const isSecAdmin = section && info.sectionAdmins?.[section]?.includes(req.session.user.username);
+
+    if (!isOwner && !isSecAdmin) return res.status(403).json({ error: '权限不足' });
+
+    switch (action) {
+        case 'setMuted': // 禁言
+            if (section) {
+                if (!info.sectionSettings) info.sectionSettings = {};
+                if (!info.sectionSettings[section]) info.sectionSettings[section] = {};
+                info.sectionSettings[section].muted = data.muted;
+            } else {
+                if (!isOwner) return res.status(403).json({ error: '仅限创建者' });
+                info.muted = data.muted;
+            }
+            break;
+        case 'updateBlacklist': // 黑名单
+            let list = section ? (info.sectionSettings?.[section]?.blacklist || []) : (info.blacklist || []);
+            if (data.type === 'add') {
+                if (!list.includes(data.user)) list.push(data.user);
+            } else {
+                list = list.filter(u => u !== data.user);
+            }
+            if (section) {
+                if (!info.sectionSettings) info.sectionSettings = {};
+                if (!info.sectionSettings[section]) info.sectionSettings[section] = {};
+                info.sectionSettings[section].blacklist = list;
+            } else {
+                info.blacklist = list;
+            }
+            break;
+        case 'manageSecAdmin': // 分区管理员 (仅Owner)
+            if (!isOwner) return res.status(403).json({ error: '仅限创建者' });
+            if (!info.sectionAdmins) info.sectionAdmins = {};
+            if (!info.sectionAdmins[section]) info.sectionAdmins[section] = [];
+            if (data.type === 'add') {
+                if (!info.sectionAdmins[section].includes(data.user)) info.sectionAdmins[section].push(data.user);
+            } else {
+                info.sectionAdmins[section] = info.sectionAdmins[section].filter(u => u !== data.user);
+            }
+            break;
+        case 'sectionConfig': // 分区改名、图片、排序 (仅Owner)
+            if (!isOwner) return res.status(403).json({ error: '仅限创建者' });
+            if (!info.sectionSettings) info.sectionSettings = {};
+            if (!info.sectionSettings[section]) info.sectionSettings[section] = {};
+            Object.assign(info.sectionSettings[section], data);
+            // 如果涉及物理改名
+            if (data.newName && data.newName !== section) {
+                const oldPath = path.join(config.data_dir, board, section);
+                const newPath = path.join(config.data_dir, board, data.newName);
+                if (fs.existsSync(oldPath)) fs.renameSync(oldPath, newPath);
+                info.sectionSettings[data.newName] = info.sectionSettings[section];
+                delete info.sectionSettings[section];
+            }
+            break;
+        case 'deletePost': // 删除帖子
+            const postPath = path.join(config.data_dir, board, section, data.filename);
+            if (fs.existsSync(postPath)) fs.unlinkSync(postPath);
+            return res.json({ success: true });
     }
+
+    fs.writeFileSync(infoFile, JSON.stringify(info));
+    res.json({ success: true, info });
 });
 
 // 新建板块 (任何人)
@@ -307,6 +376,19 @@ app.post('/api/section', (req, res) => {
 app.post('/api/post', (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: '请先登录' });
     const { board, section, title, content, tags } = req.body;
+    
+    // 权限校验
+    const infoFile = path.join(config.data_dir, board, 'owner.json');
+    if (fs.existsSync(infoFile)) {
+        const info = JSON.parse(fs.readFileSync(infoFile, 'utf8'));
+        const user = req.session.user.username;
+        // 检查禁言
+        if (info.muted || info.sectionSettings?.[section]?.muted) return res.status(403).json({ error: '该版块/分区目前处于禁言状态' });
+        // 检查黑名单
+        if (info.blacklist?.includes(user) || info.sectionSettings?.[section]?.blacklist?.includes(user)) {
+            return res.status(403).json({ error: '您已被列入黑名单，无法操作' });
+        }
+    }
     if (board.includes('..') || section.includes('..')) return res.status(400).json({ error: 'Invalid path' });
     const dirPath = path.join(config.data_dir, board, section);
     if (!fs.existsSync(dirPath)) return res.status(400).json({ error: '分区不存在' });

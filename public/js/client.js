@@ -53,7 +53,7 @@ function renderUserZone() {
                 <div>${currentUser.username}</div>
                 <div>${currentUser.email || '已登录'}</div>
             </div>
-            <div style="margin-left: auto; color: red; font-size: 12px;" onclick="location.href='/logout'">退出</div>
+            <div style="margin-left: auto; color: red; font-size: 12px; cursor:pointer;" onclick="location.href='/logout'">退出</div>
         `;
     } else {
         zone.innerHTML = `<div class="nav-item" onclick="location.href='/login'" style="width:100%; justify-content:center;">🔑 登录 PassPort</div>`;
@@ -71,7 +71,6 @@ function renderSidebarBoards() {
     const container = document.getElementById('board-list');
     container.innerHTML = '';
     
-    // 1. 渲染关注的分区/板块
     if (userFollows.boards.length > 0 || userFollows.sections.length > 0) {
         const followTitle = document.createElement('div');
         followTitle.className = 'nav-title';
@@ -94,11 +93,8 @@ function renderSidebarBoards() {
             el.onclick = () => loadPosts(b, sec);
             container.appendChild(el);
         });
-        
-        // container.appendChild(document.createElement('hr'));
     }
 
-    // 2. 渲染常规板块列表
     const allTitle = document.createElement('div');
     allTitle.className = 'nav-title';
     allTitle.innerText = '板块与分区';
@@ -135,71 +131,17 @@ function renderSidebarBoards() {
 
 function toggleSections(board, forceOpen = false) {
     const el = document.getElementById(`group-${board}`);
+    if(!el) return;
     if (forceOpen) el.style.display = 'block';
     else el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
-async function loadBoard(board) {
-    currentActiveBoard = board;
-    await transitionTo(async () => {
-        const container = document.getElementById('main-container');
-        const sections = boardStructure[board] || [];
-        const isFollowed = userFollows.boards.includes(board);
-        
-        // 获取该板块下的热门帖子
-        const postsRes = await fetch('/api/all-posts');
-        const all = await postsRes.json();
-        const boardPosts = all.filter(p => p.board === board).sort((a,b) => (b.likes?.length||0) - (a.likes?.length||0)).slice(0, 3);
-
-        container.innerHTML = `
-            <div class="hero-section">
-                <span class="section-date">板块目录</span>
-                <div class="section-header" style="padding:0; margin-bottom: 30px; align-items: center;">
-                    <div class="section-title">${board}</div>
-                    <div style="display:flex; gap:10px;">
-                        <button class="follow-btn" onclick="showBoardManage('${board}')">⚙️ 管理</button>
-                        <button class="follow-btn ${isFollowed ? 'active' : ''}" onclick="toggleFollow('board', '${board}', this)">
-                            ${isFollowed ? '已关注' : '+ 关注板块'}
-                        </button>
-                    </div>
-                </div>
-
-                ${boardPosts.length ? `
-                    <div class="nav-title" style="margin-bottom: 15px;">🏆 热门帖子</div>
-                    <div class="card-grid" style="margin-bottom: 40px;">
-                        ${boardPosts.map(p => createPostCardHTML(p)).join('')}
-                    </div>
-                ` : ''}
-                
-                <div class="nav-title" style="margin-bottom: 15px;">全部分区</div>
-                <div class="card-grid">
-                    ${sections.map(sec => `
-                        <div class="fluent-card" onclick="loadPosts('${board}', '${sec}')" style="height: 180px; background: white;">
-                            <div style="padding: 20px;">
-                                <div class="card-category">Section</div>
-                                <div class="card-title" style="color: #000; font-size: 24px;">${sec}</div>
-                                <div class="card-desc" style="color: #666;">点击进入分区查看帖子</div>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
-        
-        const infoRes = await fetch(`/api/board/info?board=${encodeURIComponent(board)}`);
-        const info = await infoRes.json();
-        document.getElementById('menu-new-section').style.display = (currentUser && info.owner === currentUser.username) ? 'flex' : 'none';
-    });
-}
-
-// 提取内容中第一张图片
 function extractFirstImage(content) {
     const imgRegex = /!\[.*?\]\((.*?)\)/;
     const match = content.match(imgRegex);
     return match ? match[1] : null;
 }
 
-// 通用帖子卡片生成
 function createPostCardHTML(post, category = "") {
     const img = extractFirstImage(post.content);
     const style = img ? `background-image: url('${img}'); background-size: cover;` : `background: linear-gradient(45deg, #0078d4, #00c6ff);`;
@@ -209,13 +151,12 @@ function createPostCardHTML(post, category = "") {
             <div class="card-overlay">
                 <div class="card-category">${category || post.section}</div>
                 <div class="card-title">${post.title}</div>
-                <div class="card-desc">by ${post.author} • ${post.likes?.length || 0} 👍</div>
+                <div class="card-desc">${post.author} • ${post.likes?.length || 0} ❤️</div>
             </div>
         </div>
     `;
 }
 
-// 页面渲染逻辑
 async function loadPage(pageType) {
     currentView = pageType;
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -227,27 +168,20 @@ async function loadPage(pageType) {
 
         if (pageType === 'today') {
             const todayStr = new Date().toLocaleDateString('zh-CN', { weekday: 'long', month: 'long', day: 'numeric' });
-            
-            // 热门 (赞最多)
             const hotPosts = [...allPosts].sort((a,b) => (b.likes?.length||0) - (a.likes?.length||0)).slice(0, 3);
-            // 关注 (如果登录)
             const followedPosts = allPosts.filter(p => userFollows.sections.includes(`${p.board}/${p.section}`) || userFollows.boards.includes(p.board)).slice(0, 3);
-            // 最新
             const latestPosts = [...allPosts].sort((a,b) => b.time - a.time).slice(0, 3);
 
             container.innerHTML = `
                 <div class="hero-section">
                     <span class="section-date">${todayStr}</span>
                     <div class="section-title">Today</div>
-                    
                     <div class="nav-title" style="margin: 30px 0 15px;">🔥 热门推荐</div>
                     <div class="card-grid">${hotPosts.map(p => createPostCardHTML(p)).join('')}</div>
-
                     ${followedPosts.length ? `
                         <div class="nav-title" style="margin: 30px 0 15px;">⭐ 我的关注</div>
                         <div class="card-grid">${followedPosts.map(p => createPostCardHTML(p)).join('')}</div>
                     ` : ''}
-
                     <div class="nav-title" style="margin: 30px 0 15px;">🚀 最新发布</div>
                     <div class="list-view">
                         ${latestPosts.map(p => `
@@ -273,32 +207,80 @@ async function loadPage(pageType) {
     });
 }
 
+async function loadBoard(board) {
+    currentActiveBoard = board;
+    await transitionTo(async () => {
+        const container = document.getElementById('main-container');
+        const sections = boardStructure[board] || [];
+        const isFollowed = userFollows.boards.includes(board);
+        
+        const postsRes = await fetch('/api/all-posts');
+        const all = await postsRes.json();
+        const boardPosts = all.filter(p => p.board === board).sort((a,b) => (b.likes?.length||0) - (a.likes?.length||0)).slice(0, 3);
+
+        container.innerHTML = `
+            <div class="hero-section">
+                <span class="section-date">板块目录</span>
+                <div class="section-header" style="padding:0; margin-bottom: 30px; align-items: center;">
+                    <div class="section-title">${board}</div>
+                    <div style="display:flex; gap:10px;">
+                        <button class="follow-btn" onclick="showManagement('${board}')">⚙️ 管理</button>
+                        <button class="follow-btn ${isFollowed ? 'active' : ''}" onclick="toggleFollow('board', '${board}', this)">
+                            ${isFollowed ? '已关注' : '+ 关注板块'}
+                        </button>
+                    </div>
+                </div>
+                ${boardPosts.length ? `
+                    <div class="nav-title" style="margin-bottom: 15px;">🏆 热门帖子</div>
+                    <div class="card-grid" style="margin-bottom: 40px;">
+                        ${boardPosts.map(p => createPostCardHTML(p)).join('')}
+                    </div>
+                ` : ''}
+                <div class="nav-title" style="margin-bottom: 15px;">全部分区</div>
+                <div class="card-grid">
+                    ${sections.map(sec => `
+                        <div class="fluent-card" onclick="loadPosts('${board}', '${sec}')" style="height: 180px; background: white;">
+                            <div style="padding: 20px;">
+                                <div class="card-category">Section</div>
+                                <div class="card-title" style="color: #000; font-size: 24px;">${sec}</div>
+                                <div class="card-desc" style="color: #666;">点击进入分区查看帖子</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    });
+}
+
 async function loadPosts(board, section) {
     currentActiveBoard = board;
-    
     await transitionTo(async () => {
         const container = document.getElementById('main-container');
         const target = `${board}/${section}`;
         const isFollowed = userFollows.sections.includes(target);
+
+        const infoRes = await fetch(`/api/board/manage-info?board=${encodeURIComponent(board)}`);
+        const info = await infoRes.json();
+        const canManage = currentUser && (info.owner === currentUser.username || info.sectionAdmins?.[section]?.includes(currentUser.username));
 
         container.innerHTML = `
             <div style="padding:40px;">
                 <div class="back-btn" onclick="loadBoard('${board}')">← 返回 ${board}</div>
                 <div class="section-header" style="padding:0; margin-bottom: 20px; align-items: center;">
                     <div class="section-title">${section}</div>
-                    <button class="follow-btn ${isFollowed ? 'active' : ''}" onclick="toggleFollow('section', '${target}', this)">
-                        ${isFollowed ? '已关注' : '+ 关注分区'}
-                    </button>
+                    <div style="display:flex; gap:10px;">
+                        ${canManage ? `<button class="follow-btn" onclick="showManagement('${board}', '${section}')">⚙️ 管理</button>` : ''}
+                        <button class="follow-btn ${isFollowed ? 'active' : ''}" onclick="toggleFollow('section', '${target}', this)">
+                            ${isFollowed ? '已关注' : '+ 关注分区'}
+                        </button>
+                    </div>
                 </div>
                 <div class="card-grid" id="top-posts-grid" style="margin-bottom: 30px; padding: 0;"></div>
                 <div class="nav-title" style="margin-bottom: 15px;">所有帖子</div>
                 <div class="list-view" id="post-list">加载中...</div>
             </div>
         `;
-
-        const infoRes = await fetch(`/api/board/info?board=${encodeURIComponent(board)}`);
-        const info = await infoRes.json();
-        document.getElementById('menu-new-section').style.display = (currentUser && info.owner === currentUser.username) ? 'flex' : 'none';
 
         const res = await fetch(`/api/posts?board=${encodeURIComponent(board)}&section=${encodeURIComponent(section)}`);
         const posts = await res.json();
@@ -311,14 +293,12 @@ async function loadPosts(board, section) {
             return; 
         }
 
-        posts.sort((a, b) => (b.likes ? b.likes.length : 0) - (a.likes ? a.likes.length : 0));
+        posts.sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0));
 
-        // 提取最热门的一个帖子（如果有）
-        if (posts.length > 0 && posts[0].likes && posts[0].likes.length > 0) {
+        if (posts.length > 0 && posts[0].likes?.length > 0) {
             const topPost = posts[0];
             const img = extractFirstImage(topPost.content);
             const imgStyle = img ? `background-image: url('${img}'); background-size: cover;` : `background: linear-gradient(135deg, var(--primary-color), #005a9e);`;
-            
             grid.innerHTML = `
                 <div class="fluent-card highlight-post" onclick="showPostDetailWrapper('${topPost.filename}', '${board}', '${section}')">
                     <div class="card-image" style="${imgStyle}"></div>
@@ -330,7 +310,7 @@ async function loadPosts(board, section) {
                 </div>
             `;
         } else {
-            grid.style.display = 'none'; // 没有特别热门的就不显示大卡片
+            grid.style.display = 'none';
         }
 
         posts.forEach(post => {
@@ -341,9 +321,12 @@ async function loadPosts(board, section) {
                 <div class="list-icon">📝</div>
                 <div class="list-details">
                     <div class="list-title">${post.title}</div>
-                    <div class="list-subtitle">${post.author} • ${post.likes ? post.likes.length : 0} 👍</div>
+                    <div class="list-subtitle">${post.author} • ${post.likes?.length || 0} 👍</div>
                 </div>
-                <button class="btn-get">查看</button>`;
+                <div style="display:flex; gap:5px;">
+                    ${canManage ? `<button class="btn-get" style="color:red;" onclick="event.stopPropagation(); if(confirm('确定删除?')) updateManage('${board}', '${section}', 'deletePost', {filename: '${post.filename}'})">🗑️</button>` : ''}
+                    <button class="btn-get">查看</button>
+                </div>`;
             list.appendChild(item);
         });
     });
@@ -360,9 +343,8 @@ function showPostDetail(post, board, section) {
     transitionTo(async () => {
         const container = document.getElementById('main-container');
         const htmlContent = marked.parse(post.content);
-        
-        const isLiked = currentUser && post.likes && post.likes.includes(currentUser.username);
-        const likeCount = post.likes ? post.likes.length : 0;
+        const isLiked = currentUser && post.likes?.includes(currentUser.username);
+        const likeCount = post.likes?.length || 0;
 
         container.innerHTML = `
             <div class="post-detail-container">
@@ -388,6 +370,113 @@ function showPostDetail(post, board, section) {
     });
 }
 
+async function showManagement(board, section = null) {
+    const res = await fetch(`/api/board/manage-info?board=${encodeURIComponent(board)}`);
+    const info = await res.json();
+    
+    const modal = document.getElementById('manage-modal');
+    const body = document.getElementById('manage-body');
+    
+    document.getElementById('manage-title').innerText = section ? `分区管理: ${section}` : `板块管理: ${board}`;
+    modal.classList.add('active');
+
+    const currentBlacklist = section ? (info.sectionSettings?.[section]?.blacklist || []) : (info.blacklist || []);
+    const isMuted = section ? (info.sectionSettings?.[section]?.muted) : info.muted;
+
+    let html = `
+        <div class="form-group">
+            <label>状态控制</label>
+            <button class="btn-get" onclick="updateManage('${board}', ${section ? `'${section}'` : 'null'}, 'setMuted', {muted: ${!isMuted}})">
+                ${isMuted ? '🔴 已禁言 (点击解除)' : '🟢 运行中 (点击禁言)'}
+            </button>
+        </div>
+        <div class="form-group">
+            <label>黑名单管理</label>
+            <div style="display:flex; gap:10px; margin-bottom:10px;">
+                <input type="text" id="bl-user" class="form-control" placeholder="输入用户名">
+                <button class="btn-get" onclick="const u=document.getElementById('bl-user').value; if(u) updateManage('${board}', ${section ? `'${section}'` : 'null'}, 'updateBlacklist', {type:'add', user: u})">添加</button>
+            </div>
+            <div class="list-view">
+                ${currentBlacklist.map(u => `<div class="list-item" style="padding:5px 15px;">${u} <button class="btn-get" style="color:red; margin-left:auto;" onclick="updateManage('${board}', ${section ? `'${section}'` : 'null'}, 'updateBlacklist', {type:'remove', user:'${u}'})">移除</button></div>`).join('')}
+            </div>
+        </div>
+    `;
+
+    if (!section && currentUser && info.owner === currentUser.username) {
+        html += `
+            <div class="form-group">
+                <label>分区高级管理 (设置图片、管理员)</label>
+                <div class="list-view">
+                    ${(boardStructure[board] || []).map(sec => {
+                        const admins = info.sectionAdmins?.[sec] || [];
+                        return `
+                        <div class="list-item" style="flex-direction:column; align-items:flex-start; gap:10px; padding: 15px;">
+                            <div style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
+                                <b>${sec}</b>
+                                <button class="btn-get" style="font-size: 12px;" onclick="const u=prompt('输入要添加的管理员用户名:'); if(u) updateManage('${board}', '${sec}', 'manageSecAdmin', {type:'add', user: u})">➕ 添加管理员</button>
+                            </div>
+                            
+                            <div style="display:flex; gap:10px; width:100%;">
+                                <input type="text" class="form-control" placeholder="封面图链接" value="${info.sectionSettings?.[sec]?.image || ''}" onchange="updateManage('${board}', '${sec}', 'sectionConfig', {image: this.value})">
+                            </div>
+
+                            <div style="width:100%; display:flex; flex-wrap:wrap; gap:5px;">
+                                <span style="font-size:12px; color:#666; width:100%;">现有管理员:</span>
+                                ${admins.length > 0 ? admins.map(admin => `
+                                    <span class="nav-item" style="padding: 2px 8px; font-size: 12px; background: rgba(0,0,0,0.05); display: flex; align-items: center; gap: 5px;">
+                                        ${admin}
+                                        <span style="color:red; cursor:pointer; font-weight:bold;" onclick="if(confirm('移除管理员 ${admin} ?')) updateManage('${board}', '${sec}', 'manageSecAdmin', {type:'remove', user: '${admin}'})">×</span>
+                                    </span>
+                                `).join('') : '<span style="font-size:12px; color:#999;">暂无</span>'}
+                            </div>
+                        </div>
+                    `}).join('')}
+                </div>
+            </div>
+            <div class="form-group" style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 15px;">
+                <label>🆕 新建分区</label>
+                <div style="display:flex; gap:10px;">
+                    <input type="text" id="new-section-name-manage" class="form-control" placeholder="输入新分区名称">
+                    <button class="btn-get" onclick="const n=document.getElementById('new-section-name-manage').value; if(n) createSectionInManage('${board}', n)">创建</button>
+                </div>
+            </div>
+        `;
+    }
+    body.innerHTML = html;
+}
+
+async function createSectionInManage(board, name) {
+    const res = await fetch('/api/section', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ board, name })
+    });
+    const result = await res.json();
+    if(result.success) {
+        // alert("创建成功");
+        await loadStructure(); // 刷新侧边栏结构
+        showManagement(board); // 刷新管理界面
+    } else {
+        alert(result.error || "创建失败");
+    }
+}
+
+async function updateManage(board, section, action, data) {
+    const res = await fetch('/api/manage/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ board, section, action, data })
+    });
+    const result = await res.json();
+    if(result.success) {
+        // alert("操作成功");
+        if(action === 'deletePost') loadPosts(board, section);
+        else showManagement(board, section);
+    } else {
+        alert(result.error);
+    }
+}
+
 async function toggleLike(board, section, filename, btn) {
     if(!currentUser) return alert('请先登录');
     const res = await fetch('/api/post/like', {
@@ -400,50 +489,22 @@ async function toggleLike(board, section, filename, btn) {
         const countSpan = btn.querySelector('.like-count');
         const iconSpan = btn.querySelector('span:first-child');
         countSpan.innerText = data.count;
-        if(data.liked) {
-            btn.classList.add('active');
-            iconSpan.innerText = '❤️';
-        } else {
-            btn.classList.remove('active');
-            iconSpan.innerText = '🤍';
-        }
+        if(data.liked) { btn.classList.add('active'); iconSpan.innerText = '❤️'; }
+        else { btn.classList.remove('active'); iconSpan.innerText = '🤍'; }
     } else { alert(data.error); }
 }
 
 async function sharePost(btn) {
-    const shareData = {
-        title: document.title,
-        text: '来看看百络谷上的这篇帖子！',
-        url: window.location.href
-    };
-
+    const shareData = { title: document.title, text: '来看看百络谷上的这篇帖子！', url: window.location.href };
     try {
-        if (navigator.share) {
-            await navigator.share(shareData);
-        } else {
-            // 回退到剪贴板
+        if (navigator.share) await navigator.share(shareData);
+        else {
             await navigator.clipboard.writeText(window.location.href);
             const original = btn.innerHTML;
             btn.innerHTML = '<span>✅</span> 链接已复制';
             setTimeout(() => btn.innerHTML = original, 2000);
         }
-    } catch (err) {
-        console.log('Share failed', err);
-    }
-}
-
-// 管理功能 (演示)
-async function showBoardManage(board) {
-    const adminName = prompt("请输入要添加的管理员用户名:");
-    if(!adminName) return;
-    const res = await fetch('/api/board/admin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ board, adminName, action: 'add' })
-    });
-    const data = await res.json();
-    if(data.success) alert("设置成功！");
-    else alert(data.error);
+    } catch (err) { console.log('Share failed', err); }
 }
 
 async function toggleFollow(type, target, btn) {
@@ -520,7 +581,7 @@ async function submitSection() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ board: currentActiveBoard, name })
     });
-    if((await res.json()).success) { location.reload(); } else { alert('创建失败，可能您不是该板块创建者'); }
+    if((await res.json()).success) { location.reload(); } else { alert('创建失败'); }
 }
 
 function updateSectionSelect() {
@@ -564,7 +625,7 @@ async function submitPost() {
         closeModal('post-modal');
         document.getElementById('post-title').value = '';
         document.getElementById('post-content').value = '';
-        alert('发布成功！');
+        // alert('发布成功！');
         loadPosts(board, section);
     } else { alert('发布失败: ' + result.error); }
 }

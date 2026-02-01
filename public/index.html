@@ -94,6 +94,22 @@
         </div>
     </div>
 
+    <!-- 管理中心模态框 -->
+    <div class="modal" id="manage-modal">
+        <div class="modal-content" style="width: 800px; max-height: 80vh; overflow-y: auto;">
+            <h2 id="manage-title">管理中心</h2>
+            <div id="manage-tabs" style="display:flex; gap:10px; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom:10px;">
+                <!-- 动态填充页签 -->
+            </div>
+            <div id="manage-body">
+                <!-- 动态填充管理内容 -->
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeModal('manage-modal')" class="btn-get">关闭</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 发帖模态框 -->
     <div class="modal" id="post-modal">
         <div class="modal-content">
