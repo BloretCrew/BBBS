@@ -102,23 +102,35 @@ app.get('/logout', (req, res) => {
 
 // --- 路由: 数据 API (板块 -> 分区 -> 帖子) ---
 
-// 获取完整的板块结构
+// 获取完整的板块结构 (支持自定义排序)
 app.get('/api/structure', (req, res) => {
     const structure = {};
-    
     try {
         const boards = fs.readdirSync(config.data_dir);
         boards.forEach(board => {
             const boardPath = path.join(config.data_dir, board);
             if (fs.statSync(boardPath).isDirectory()) {
-                structure[board] = [];
-                const sections = fs.readdirSync(boardPath);
-                sections.forEach(section => {
-                    const sectionPath = path.join(boardPath, section);
-                    if (fs.statSync(sectionPath).isDirectory()) {
-                        structure[board].push(section);
-                    }
+                // 读取排序配置
+                let orderedSections = [];
+                const infoFile = path.join(boardPath, 'owner.json');
+                if (fs.existsSync(infoFile)) {
+                    const info = JSON.parse(fs.readFileSync(infoFile, 'utf8'));
+                    orderedSections = info.sectionsOrder || [];
+                }
+
+                const actualSections = fs.readdirSync(boardPath).filter(f => fs.statSync(path.join(boardPath, f)).isDirectory());
+                
+                // 按照 orderedSections 排序，没在排序列表里的放后面
+                actualSections.sort((a, b) => {
+                    const idxA = orderedSections.indexOf(a);
+                    const idxB = orderedSections.indexOf(b);
+                    if (idxA === -1 && idxB === -1) return a.localeCompare(b);
+                    if (idxA === -1) return 1;
+                    if (idxB === -1) return -1;
+                    return idxA - idxB;
                 });
+
+                structure[board] = actualSections;
             }
         });
         res.json(structure);
@@ -341,6 +353,10 @@ app.post('/api/manage/update', (req, res) => {
             const postPath = path.join(config.data_dir, board, section, data.filename);
             if (fs.existsSync(postPath)) fs.unlinkSync(postPath);
             return res.json({ success: true });
+        case 'reorderSections': // 重新排序分区
+            if (!isOwner) return res.status(403).json({ error: '仅限创建者' });
+            info.sectionsOrder = data.newOrder;
+            break;
     }
 
     fs.writeFileSync(infoFile, JSON.stringify(info));

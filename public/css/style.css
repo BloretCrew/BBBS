@@ -32,6 +32,28 @@ body {
     flex-direction: column;
     border-right: 1px solid rgba(0,0,0,0.1);
     z-index: 100;
+    
+    /* 允许纵向滚动，隐藏横向滚动 */
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* 自定义侧边栏滚动条，使其符合 Fluent 设计 */
+.sidebar::-webkit-scrollbar {
+    width: 5px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.2);
 }
 
 .search-container {

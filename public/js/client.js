@@ -403,16 +403,23 @@ async function showManagement(board, section = null) {
     `;
 
     if (!section && currentUser && info.owner === currentUser.username) {
+        const sections = boardStructure[board] || [];
         html += `
             <div class="form-group">
-                <label>分区高级管理 (设置图片、管理员)</label>
+                <label>分区高级管理 (排序、图片、管理员)</label>
                 <div class="list-view">
-                    ${(boardStructure[board] || []).map(sec => {
+                    ${sections.map((sec, index) => {
                         const admins = info.sectionAdmins?.[sec] || [];
                         return `
                         <div class="list-item" style="flex-direction:column; align-items:flex-start; gap:10px; padding: 15px;">
                             <div style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
-                                <b>${sec}</b>
+                                <div style="display:flex; align-items:center; gap:10px;">
+                                    <div style="display:flex; flex-direction:column; gap:2px;">
+                                        <button class="btn-get" style="padding:2px 5px; font-size:10px;" onclick="moveSection('${board}', ${index}, -1)" ${index === 0 ? 'disabled' : ''}>▲</button>
+                                        <button class="btn-get" style="padding:2px 5px; font-size:10px;" onclick="moveSection('${board}', ${index}, 1)" ${index === sections.length - 1 ? 'disabled' : ''}>▼</button>
+                                    </div>
+                                    <b>${sec}</b>
+                                </div>
                                 <button class="btn-get" style="font-size: 12px;" onclick="const u=prompt('输入要添加的管理员用户名:'); if(u) updateManage('${board}', '${sec}', 'manageSecAdmin', {type:'add', user: u})">➕ 添加管理员</button>
                             </div>
                             
@@ -430,7 +437,8 @@ async function showManagement(board, section = null) {
                                 `).join('') : '<span style="font-size:12px; color:#999;">暂无</span>'}
                             </div>
                         </div>
-                    `}).join('')}
+                        `;
+                    }).join('')}
                 </div>
             </div>
             <div class="form-group" style="border-top: 1px solid #eee; padding-top: 15px; margin-top: 15px;">
@@ -458,6 +466,31 @@ async function createSectionInManage(board, name) {
         showManagement(board); // 刷新管理界面
     } else {
         alert(result.error || "创建失败");
+    }
+}
+
+async function moveSection(board, index, direction) {
+    const sections = [...boardStructure[board]];
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= sections.length) return;
+
+    // 交换位置
+    [sections[index], sections[newIndex]] = [sections[newIndex], sections[index]];
+
+    const res = await fetch('/api/manage/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            board, 
+            section: null, 
+            action: 'reorderSections', 
+            data: { newOrder: sections } 
+        })
+    });
+    
+    if ((await res.json()).success) {
+        await loadStructure(); // 更新内存中的 boardStructure
+        showManagement(board); // 重新渲染管理界面
     }
 }
 
