@@ -1,2 +1,0 @@
-# Bloret BBS
-Bloret BBS
