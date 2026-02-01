@@ -1,0 +1,9 @@
+{
+  "port": 21111,
+  "app_id": "BBBS",
+  "app_secret": "kBByJzuYZpMCUGPtnLXv95Pyf3FEmVnhi7EP6jGEnfaKJT5Rze",
+  "callback_url": "http://localhost:21111/login/BPoauth",
+  "passport_host": "http://pcfs.eno.ink:20000",
+  "image_host": "http://pcfs.eno.ink:28888",
+  "data_dir": "./data/post"
+}

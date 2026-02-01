@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bloret BBS</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    
+    <!-- 左侧侧边栏 -->
+    <div class="sidebar">
+        <div class="search-container">
+            <input type="text" class="search-input" placeholder="搜索帖子、用户...">
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-title">发现</div>
+            <a href="#" class="nav-item active" onclick="loadPage('today')">
+                <span class="nav-icon">📅</span> Today
+            </a>
+            <a href="#" class="nav-item" onclick="loadPage('all-posts')">
+                <span class="nav-icon">🚀</span> 最新发布
+            </a>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-title">板块</div>
+            <div id="board-list">
+                <!-- JS 动态加载板块 -->
+            </div>
+        </div>
+
+        <div id="user-zone" class="user-zone">
+            <!-- JS 填充用户信息 -->
+            <div class="nav-item" onclick="location.href='/login'">登录 Bloret PassPort</div>
+        </div>
+    </div>
+
+    <!-- 右侧主内容 -->
+    <div class="main-content" id="main-container">
+        <!-- 动态内容 -->
+    </div>
+
+    <!-- 悬浮操作按钮 -->
+    <div style="position: fixed; bottom: 30px; right: 30px; z-index: 500;">
+        <div id="new-menu" class="bubble-menu" style="display: none; bottom: 70px; right: 0; margin-top: 0;">
+            <div class="bubble-arrow" style="top: auto; bottom: -8px; left: auto; right: 30px; border-bottom: none; border-top: 8px solid rgba(255, 255, 255, 0.85);"></div>
+            <a href="#" class="nav-item" onclick="showModal('board-modal')">🆕 新建板块</a>
+            <a href="#" class="nav-item" id="menu-new-section" onclick="showModal('section-modal')" style="display: none;">📂 新建分区</a>
+            <a href="#" class="nav-item" onclick="showPostModal()">📝 发布帖子</a>
+        </div>
+        <button onclick="toggleNewMenu()" class="fluent-card" style="width: 60px; height: 60px; padding: 0; background: var(--primary-color); color: white; font-size: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 20px rgba(0,120,215,0.4);">
+            +
+        </button>
+    </div>
+
+    <!-- 新建板块模态框 -->
+    <div class="modal" id="board-modal">
+        <div class="modal-content">
+            <h2>新建板块</h2>
+            <div class="form-group">
+                <label>板块名称</label>
+                <input type="text" id="board-name" class="form-control" placeholder="如：游戏讨论">
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeModal('board-modal')" class="btn-get" style="background: #eee; color: #333;">取消</button>
+                <button onclick="submitBoard()" class="btn-get" style="background: var(--primary-color); color: white;">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新建分区模态框 -->
+    <div class="modal" id="section-modal">
+        <div class="modal-content">
+            <h2>在 <span id="current-board-name"></span> 新建分区</h2>
+            <div class="form-group">
+                <label>分区名称</label>
+                <input type="text" id="section-name" class="form-control" placeholder="如：常见问题">
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeModal('section-modal')" class="btn-get" style="background: #eee; color: #333;">取消</button>
+                <button onclick="submitSection()" class="btn-get" style="background: var(--primary-color); color: white;">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 发帖模态框 -->
+    <div class="modal" id="post-modal">
+        <div class="modal-content">
+            <h2>发布新主题</h2>
+            <div class="form-group">
+                <label>选择分区</label>
+                <select id="post-board-select" class="form-control" onchange="updateSectionSelect()"></select>
+                <select id="post-section-select" class="form-control" style="margin-top: 10px;"></select>
+            </div>
+            <div class="form-group">
+                <label>标题</label>
+                <input type="text" id="post-title" class="form-control" placeholder="输入引人注目的标题">
+            </div>
+            <div class="form-group">
+                <label>内容</label>
+                <textarea id="post-content" class="form-control" placeholder="支持 Markdown (简易)"></textarea>
+            </div>
+            <div class="form-group">
+                <label>上传图片</label>
+                <input type="file" id="post-image" class="form-control" accept="image/*">
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeModal('post-modal')" class="btn-get" style="background: #eee; color: #333;">取消</button>
+                <button onclick="submitPost()" class="btn-get" style="background: var(--primary-color); color: white;">发布</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="/js/client.js"></script>
+</body>
+</html>
