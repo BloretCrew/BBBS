@@ -139,14 +139,58 @@ app.get('/api/posts', (req, res) => {
     const posts = files.map(file => {
         try {
             const content = JSON.parse(fs.readFileSync(path.join(dirPath, file), 'utf8'));
-            // 确保 likes 字段存在
             if (!content.likes) content.likes = [];
             if (!content.shares) content.shares = 0;
-            return { filename: file, ...content };
+            return { filename: file, board, section, filename: file, ...content };
         } catch (e) { return null; }
     }).filter(p => p !== null);
 
     res.json(posts);
+});
+
+// --- 新增 API: 获取全局所有帖子 (用于 Today 和 最新) ---
+app.get('/api/all-posts', (req, res) => {
+    let allPosts = [];
+    const boards = fs.readdirSync(config.data_dir);
+    boards.forEach(board => {
+        const boardPath = path.join(config.data_dir, board);
+        if (!fs.statSync(boardPath).isDirectory()) return;
+        const sections = fs.readdirSync(boardPath);
+        sections.forEach(section => {
+            const sectionPath = path.join(boardPath, section);
+            if (!fs.statSync(sectionPath).isDirectory()) return;
+            const files = fs.readdirSync(sectionPath);
+            files.forEach(file => {
+                if (!file.endsWith('.json') || file === 'owner.json') return;
+                try {
+                    const content = JSON.parse(fs.readFileSync(path.join(sectionPath, file), 'utf8'));
+                    allPosts.push({ ...content, board, section, filename: file });
+                } catch (e) {}
+            });
+        });
+    });
+    res.json(allPosts);
+});
+
+// --- 新增 API: 板块管理 (设置管理员) ---
+app.post('/api/board/admin', (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: '请先登录' });
+    const { board, adminName, action } = req.body; // action: 'add' or 'remove'
+    const infoFile = path.join(config.data_dir, board, 'owner.json');
+    if (!fs.existsSync(infoFile)) return res.status(404).json({ error: '板块不存在' });
+
+    const info = JSON.parse(fs.readFileSync(infoFile, 'utf8'));
+    if (info.owner !== req.session.user.username) return res.status(403).json({ error: '只有创建者可以管理管理员' });
+
+    if (!info.admins) info.admins = [];
+    if (action === 'add') {
+        if (!info.admins.includes(adminName)) info.admins.push(adminName);
+    } else {
+        info.admins = info.admins.filter(a => a !== adminName);
+    }
+
+    fs.writeFileSync(infoFile, JSON.stringify(info));
+    res.json({ success: true, admins: info.admins });
 });
 
 // --- 新增 API: 点赞 ---
