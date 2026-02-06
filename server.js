@@ -12,6 +12,23 @@ const upload = multer(); // 用于处理内存中的文件上传
 
 // 中间件配置
 app.use(express.json());
+
+// 修复前端 Bug：拦截首页请求，将列表点击事件替换为 Wrapper 调用，以触发置顶权限检查
+app.get('/', (req, res, next) => {
+    const indexPath = path.join(__dirname, 'public', 'index.html');
+    if (fs.existsSync(indexPath)) {
+        let html = fs.readFileSync(indexPath, 'utf8');
+        // 将 item.onclick = () => showPostDetail(...) 替换为 item.onclick = () => showPostDetailWrapper(...)
+        html = html.replace(
+            /item\.onclick\s*=\s*\(\)\s*=>\s*showPostDetail\(post,\s*board,\s*section\);/g,
+            'item.onclick = () => showPostDetailWrapper(post.filename, board, section);'
+        );
+        res.send(html);
+    } else {
+        next();
+    }
+});
+
 app.use(express.static('public'));
 app.use(cookieSession({
     name: 'session',
@@ -92,7 +109,11 @@ app.get('/login/BPoauth', async (req, res) => {
 });
 
 app.get('/api/user', (req, res) => {
-    res.json(req.session.user || null);
+    if (!req.session.user) return res.json(null);
+    const user = { ...req.session.user };
+    // 在返回用户信息时，根据配置文件判断其是否为超级管理员
+    user.isSuperAdmin = config.super_admins?.includes(user.username);
+    res.json(user);
 });
 
 app.get('/logout', (req, res) => {
@@ -530,7 +551,73 @@ app.get('/api/user/profile/:username', (req, res) => {
     res.json(stats);
 });
 
-// --- 新增 API: 系统状态 ---
+// 权限等级定义与校验
+const PERMS = { NONE: 0, POSTER: 1, SEC_ADMIN: 2, BOARD_ADMIN: 3, BOARD_OWNER: 4, SUPER: 5 };
+function getPermLevel(username, board, section) {
+    if (config.super_admins?.includes(username)) return PERMS.SUPER;
+    if (!board) return PERMS.POSTER;
+    const infoFile = path.join(config.data_dir, board, 'owner.json');
+    if (!fs.existsSync(infoFile)) return PERMS.POSTER;
+    const info = JSON.parse(fs.readFileSync(infoFile, 'utf8'));
+    if (info.owner === username) return PERMS.BOARD_OWNER;
+    if (info.admins?.includes(username)) return PERMS.BOARD_ADMIN;
+    if (section && info.sectionAdmins?.[section]?.includes(username)) return PERMS.SEC_ADMIN;
+    return PERMS.POSTER;
+}
+
+// 帖子置顶 API
+app.post('/api/post/pin', (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: '请先登录' });
+    const { board, section, filename, level, duration } = req.body; // level: 'today', 'board', 'section'
+    const user = req.session.user.username;
+    const perm = getPermLevel(user, board, section);
+
+    // 校验权限
+    if (level === 'today' && perm < PERMS.SUPER) return res.status(403).json({ error: '权限不足以置顶到首页' });
+    if (level === 'board' && perm < PERMS.BOARD_ADMIN) return res.status(403).json({ error: '权限不足以置顶到板块' });
+    if (level === 'section' && perm < PERMS.SEC_ADMIN) return res.status(403).json({ error: '权限不足以置顶到分区' });
+
+    const filePath = path.join(config.data_dir, board, section, filename);
+    const post = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    post.pinned = { level, expireAt: duration === -1 ? -1 : Date.now() + duration * 3600000 };
+    fs.writeFileSync(filePath, JSON.stringify(post));
+    res.json({ success: true });
+});
+
+// 排行榜 API
+app.get('/api/leaderboard', (req, res) => {
+    const users = {};
+    const boards = fs.readdirSync(config.data_dir);
+    boards.forEach(b => {
+        const bp = path.join(config.data_dir, b);
+        if (!fs.statSync(bp).isDirectory()) return;
+        fs.readdirSync(bp).forEach(s => {
+            const sp = path.join(bp, s);
+            if (!fs.statSync(sp).isDirectory()) return;
+            fs.readdirSync(sp).forEach(f => {
+                if (!f.endsWith('.json') || f === 'owner.json') return;
+                const p = JSON.parse(fs.readFileSync(path.join(sp, f)));
+                if (!users[p.author]) users[p.author] = { posts: 0, likes: 0 };
+                users[p.author].posts++;
+                users[p.author].likes += (p.likes?.length || 0);
+            });
+        });
+    });
+    const result = Object.entries(users).map(([name, s]) => ({ username: name, ...s }))
+        .sort((a, b) => (b.likes * 2 + b.posts) - (a.likes * 2 + a.posts)).slice(0, 10);
+    res.json(result);
+});
+
+// 保存用户设置
+app.post('/api/user/settings', (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: '请先登录' });
+    const userFile = path.join(userDir, `${req.session.user.username}.json`);
+    let data = fs.existsSync(userFile) ? JSON.parse(fs.readFileSync(userFile)) : {};
+    data.settings = req.body;
+    fs.writeFileSync(userFile, JSON.stringify(data));
+    res.json({ success: true });
+});
+
 app.get('/api/system/stats', (req, res) => {
     let totalPosts = 0;
     let totalBoards = 0;

@@ -4,7 +4,507 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bloret BBS</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        /* 基础重置与变量 */
+        :root {
+            --sidebar-width: 280px;
+            --glass-bg: rgba(255, 255, 255, 0.75);
+            --glass-border: rgba(0, 0, 0, 0.05);
+            --primary-color: #0078d4;
+            --text-primary: #1d1d1f;
+            --text-secondary: #86868b;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            /* 默认背景，实际会被 JS 动态更改或保留 */
+            background-color: #f5f5f7; 
+            font-family: 'SF Pro Text', 'Segoe UI', Roboto, Helvetica, sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            color: var(--text-primary);
+        }
+
+        /* 侧边栏 (模仿 App Store 左侧) */
+        .sidebar {
+            width: var(--sidebar-width);
+            min-width: var(--sidebar-width);
+            background: rgba(245, 245, 247, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 20px 10px;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid rgba(0,0,0,0.1);
+            z-index: 100;
+            
+            /* 允许纵向滚动，隐藏横向滚动 */
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        /* 自定义侧边栏滚动条，使其符合 Fluent 设计 */
+        .sidebar::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .sidebar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .search-container {
+            padding: 0 10px 20px 10px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 8px 30px 8px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(0,0,0,0.1);
+            background: rgba(255,255,255,0.5);
+            box-sizing: border-box;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .search-input:focus {
+            background: #fff;
+            outline: 2px solid var(--primary-color);
+            border-color: transparent;
+        }
+
+        .nav-group {
+            margin-bottom: 20px;
+        }
+
+        .nav-title {
+            padding: 0 12px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            margin: 2px 0;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            color: var(--text-primary);
+            transition: background 0.2s;
+            font-size: 15px;
+        }
+
+        .nav-item:hover {
+            background: rgba(0,0,0,0.05);
+        }
+
+        .nav-item.active {
+            background: rgba(0,0,0,0.1);
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+
+        .nav-icon {
+            margin-right: 12px;
+            width: 20px;
+            text-align: center;
+        }
+
+        /* 用户区域在侧边栏底部 */
+        .user-zone {
+            margin-top: auto;
+            padding: 15px;
+            border-top: 1px solid rgba(0,0,0,0.05);
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        .user-zone img {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            margin-right: 10px;
+            object-fit: cover;
+        }
+        .pagination-bar {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+            padding: 10px;
+        }
+        .page-btn {
+            padding: 5px 12px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            background: white;
+            cursor: pointer;
+        }
+        .page-btn.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        .user-info-text div:first-child { font-weight: 600; font-size: 14px; }
+        .user-info-text div:last-child { font-size: 12px; color: var(--text-secondary); }
+
+        /* 主内容区域 */
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            position: relative;
+            scroll-behavior: smooth;
+            padding-bottom: 50px;
+        }
+
+        /* 页面切换动画 */
+        .fade-content {
+            animation: fadeContent 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes fadeContent {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Hero Banner (模拟 Today 页面) */
+        .hero-section {
+            padding: 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 20px;
+            padding: 0 40px;
+        }
+        .section-title {
+            font-size: 32px;
+            font-weight: 700;
+        }
+        .section-date {
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            display: block;
+        }
+
+        /* 卡片网格 */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 24px;
+            padding: 0 40px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        /* Fluent 风格卡片 (复用并优化提供的 CSS) */
+        .fluent-card {
+            background: var(--glass-bg);
+            border-radius: 12px;
+            box-shadow: 
+                0 4px 12px rgba(0, 0, 0, 0.08), 
+                0 0 0 1px var(--glass-border) inset;
+            padding: 20px;
+            transition: transform 0.2s cubic-bezier(0.33, 1, 0.68, 1), box-shadow 0.2s;
+            cursor: pointer;
+            backdrop-filter: blur(30px);
+            display: flex;
+            flex-direction: column;
+            height: 300px; /* 固定高度 */
+            position: relative;
+            overflow: hidden;
+        }
+
+        .fluent-card:hover {
+            transform: scale(1.02);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.12);
+        }
+
+        .card-image {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-size: cover;
+            background-position: center;
+            z-index: 0;
+            transition: transform 0.3s;
+        }
+
+        .fluent-card:hover .card-image {
+            transform: scale(1.05);
+        }
+
+        .card-overlay {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+            padding: 20px;
+            color: white;
+            z-index: 1;
+        }
+
+        .card-category {
+            font-size: 12px;
+            text-transform: uppercase;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+
+        .card-title {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            line-height: 1.2;
+        }
+
+        .card-desc {
+            font-size: 14px;
+            opacity: 0.9;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        /* 列表视图 (类似 App 排行榜) */
+        .list-view {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            padding: 0 40px;
+        }
+
+        .list-item {
+            display: flex;
+            align-items: center;
+            background: rgba(255,255,255,0.6);
+            padding: 10px 20px;
+            border-radius: 12px;
+            transition: background 0.2s;
+        }
+        .list-item:hover {
+            background: rgba(255,255,255,0.9);
+        }
+
+        .list-icon {
+            width: 50px;
+            height: 50px;
+            background: #ddd;
+            border-radius: 12px;
+            margin-right: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: #666;
+        }
+
+        .list-details { flex: 1; }
+        .list-title { font-weight: 600; color: #000; }
+        .list-subtitle { font-size: 13px; color: var(--text-secondary); }
+
+        .btn-get {
+            background: rgba(240, 240, 240, 0.8);
+            color: var(--primary-color);
+            font-weight: 700;
+            border: none;
+            padding: 6px 20px;
+            border-radius: 16px;
+            cursor: pointer;
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+        .btn-get:hover { background: rgba(230,230,230,1); }
+
+        /* 发帖模态框 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+        .modal.active { display: flex; }
+
+        .modal-content {
+            background: white;
+            width: 600px;
+            max-width: 90%;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            animation: fadeInScale 0.3s;
+        }
+
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        textarea.form-control { height: 150px; resize: vertical; }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        @keyframes fadeInScale {
+            from { opacity: 0; transform: scale(0.95) translateY(10px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        /* 气泡菜单复刻图片样式 */
+        .bubble-menu {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 14px;
+            padding: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            z-index: 600;
+            transform-origin: bottom right;
+            animation: fadeInScale 0.2s cubic-bezier(0.33, 1, 0.68, 1);
+        }
+
+        .bubble-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 15px;
+            color: #1d1d1f;
+            cursor: pointer;
+            transition: background 0.1s;
+            white-space: nowrap;
+        }
+
+        .bubble-item:hover {
+            background: rgba(0, 0, 0, 0.06);
+        }
+
+        .bubble-icon {
+            margin-right: 12px;
+            font-size: 18px;
+            width: 24px;
+            text-align: center;
+        }
+
+        /* 帖子详情页 */
+        .post-detail-container {
+            padding: 40px;
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            min-height: 100vh;
+            box-shadow: 0 0 50px rgba(0,0,0,0.05);
+        }
+        .post-detail-title { font-size: 36px; font-weight: 800; margin-bottom: 10px; }
+        .post-meta { display: flex; align-items: center; color: var(--text-secondary); margin-bottom: 30px; }
+        .post-body { font-size: 18px; line-height: 1.6; }
+        .post-body img { max-width: 100%; border-radius: 8px; margin: 10px 0; }
+        .back-btn { margin-bottom: 20px; display: inline-block; cursor: pointer; color: var(--primary-color); }
+
+        /* 操作栏样式 (点赞、分享) */
+        .action-bar {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .action-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: #f5f5f7;
+            color: var(--text-primary);
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .action-btn:hover {
+            background: #e5e5e7;
+            transform: scale(1.05);
+        }
+
+        .action-btn.active {
+            background: #ffe0e0;
+            color: #ff3b30;
+        }
+
+        .action-btn.share:active {
+            background: #d1e7dd;
+            color: #198754;
+        }
+
+        /* 热门帖子高亮样式 */
+        .highlight-post {
+            grid-column: 1 / -1; /* 占满整行 */
+            background: linear-gradient(135deg, var(--primary-color), #005a9e);
+            color: white;
+            height: 320px;
+        }
+        .highlight-post .card-title { color: white; font-size: 28px; }
+        .highlight-post .card-desc { color: rgba(255,255,255,0.9); }
+        .highlight-post .card-category { color: rgba(255,255,255,0.8); }
+
+        .follow-btn {
+            padding: 6px 16px;
+            border-radius: 16px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid var(--primary-color);
+            background: transparent;
+            color: var(--primary-color);
+            transition: all 0.2s;
+        }
+
+        .follow-btn.active {
+            background: var(--primary-color);
+            color: white;
+        }
+    </style>
 </head>
 <body>
     
@@ -39,9 +539,15 @@
             </div>
         </div>
 
-        <div id="user-zone" class="user-zone">
+        <div id="user-zone" class="user-zone" style="position: relative;" onclick="event.stopPropagation(); toggleUserMenu()">
             <!-- JS 填充用户信息 -->
-            <div class="nav-item" onclick="location.href='/login'">登录 Bloret PassPort</div>
+        </div>
+
+        <div id="user-bubble-menu" class="bubble-menu" style="display: none; bottom: 80px; left: 15px; min-width: 220px; transform-origin: bottom left;">
+            <div class="bubble-item" onclick="showUserSettings()"><span class="bubble-icon">⚙️</span> 用户设置</div>
+            <div class="bubble-item" onclick="window.open('${config.passport_host}')"><span class="bubble-icon">🆔</span> Bloret PassPort</div>
+            <div style="height:1px; background:rgba(0,0,0,0.05); margin:5px 0;"></div>
+            <div class="bubble-item" style="color:#ff3b30;" onclick="location.href='/logout'"><span class="bubble-icon">🚪</span> 退出登录</div>
         </div>
     </div>
 
@@ -98,16 +604,36 @@
         </div>
     </div>
 
+    <!-- 用户设置模态框 -->
+    <div class="modal" id="settings-modal">
+        <div class="modal-content">
+            <h2>用户设置</h2>
+            <div class="form-group">
+                <label>显示昵称</label>
+                <input type="text" id="set-nickname" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>个性签名</label>
+                <textarea id="set-bio" class="form-control" style="height:80px;"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeModal('settings-modal')" class="btn-get">取消</button>
+                <button onclick="saveSettings()" class="btn-get" style="background: var(--primary-color); color: white;">保存</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 管理中心模态框 -->
     <div class="modal" id="manage-modal">
         <div class="modal-content" style="width: 800px; max-height: 80vh; overflow-y: auto;">
-            <h2 id="manage-title">管理中心</h2>
-            <div id="manage-tabs" style="display:flex; gap:10px; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom:10px;">
-                <!-- 动态填充页签 -->
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h2 id="manage-title">管理中心</h2>
+                <input type="text" id="manage-search" placeholder="搜索项目..." class="form-control" style="width:200px;" oninput="handleManageSearch(this.value)">
             </div>
-            <div id="manage-body">
+            <div id="manage-body" style="margin-top:20px;">
                 <!-- 动态填充管理内容 -->
             </div>
+            <div id="manage-pagination" class="pagination-bar"></div>
             <div class="modal-footer">
                 <button onclick="closeModal('manage-modal')" class="btn-get">关闭</button>
             </div>
@@ -143,6 +669,851 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="/js/client.js"></script>
+    <script>
+        let currentUser = null;
+        let boardStructure = {};
+        let currentView = 'today';
+        let currentActiveBoard = null;
+        let userFollows = { boards: [], sections: [] };
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', async () => {
+            await checkLogin();
+            if(currentUser) await loadFollows();
+            await loadStructure();
+            loadPage('today');
+
+            // 点击页面其他地方关闭搜索下拉框
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.search-container')) {
+                    document.getElementById('search-suggest-box').style.display = 'none';
+                }
+            });
+        });
+
+        // 动画过渡辅助函数
+        async function transitionTo(renderFn) {
+            const container = document.getElementById('main-container');
+            container.style.opacity = '0';
+            container.style.transform = 'translateY(10px)';
+            container.style.transition = 'opacity 0.2s, transform 0.2s';
+            
+            await new Promise(r => setTimeout(r, 200));
+            await renderFn();
+
+            container.style.opacity = '0';
+            container.style.transform = 'translateY(10px)';
+            
+            requestAnimationFrame(() => {
+                container.style.opacity = '1';
+                container.style.transform = 'translateY(0)';
+            });
+        }
+
+        // 加载用户关注列表
+        async function loadFollows() {
+            const res = await fetch('/api/user/follows');
+            userFollows = await res.json();
+        }
+
+        // 检查登录状态
+        async function checkLogin() {
+            const res = await fetch('/api/user');
+            currentUser = await res.json();
+            renderUserZone();
+        }
+
+        function renderUserZone() {
+            const zone = document.getElementById('user-zone');
+            if (currentUser) {
+                zone.innerHTML = `
+                    <img src="https://ui-avatars.com/api/?name=${currentUser.username}&background=random" alt="Avatar">
+                    <div class="user-info-text">
+                        <div>${currentUser.username}</div>
+                        <div style="font-size:11px; color:#888;">点击管理账户</div>
+                    </div>
+                `;
+            } else {
+                zone.innerHTML = `<div class="nav-item" onclick="location.href='/login'" style="width:100%; justify-content:center;">🔑 登录 PassPort</div>`;
+            }
+        }
+
+        // 加载板块结构
+        async function loadStructure() {
+            const res = await fetch('/api/structure');
+            boardStructure = await res.json();
+            renderSidebarBoards();
+        }
+
+        function toggleUserMenu() {
+            const menu = document.getElementById('user-bubble-menu');
+            const isVisible = menu.style.display === 'flex';
+            document.querySelectorAll('.bubble-menu').forEach(m => m.style.display = 'none');
+            menu.style.display = isVisible ? 'none' : 'flex';
+            if (!isVisible) {
+                document.addEventListener('click', () => menu.style.display = 'none', { once: true });
+            }
+        }
+
+        async function loadLeaderboard() {
+            await transitionTo(async () => {
+                const container = document.getElementById('main-container');
+                const res = await fetch('/api/leaderboard');
+                const list = await res.json();
+                container.innerHTML = `
+                    <div class="hero-section">
+                        <div class="section-title">活跃排行榜</div>
+                        <div class="list-view" style="margin-top:30px;">
+                            ${list.map((u, i) => `
+                                <div class="list-item">
+                                    <div class="list-icon" style="${i<3?'background:#ffe0e0;color:#ff3b30':''}">${i+1}</div>
+                                    <div class="list-details"><b>${u.username}</b><br><small>${u.posts} 帖子 · ${u.likes} 获赞</small></div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>`;
+            });
+        }
+
+        function renderSidebarBoards() {
+            const boardListContainer = document.getElementById('board-list');
+            if (!boardListContainer) return;
+            boardListContainer.innerHTML = '';
+
+            // 1. 排行榜入口
+            const discoverItem = document.createElement('div');
+            discoverItem.className = 'nav-item';
+            discoverItem.innerHTML = '<span class="nav-icon">🏆</span> 排行榜';
+            discoverItem.onclick = loadLeaderboard;
+            boardListContainer.appendChild(discoverItem);
+            
+            // 2. 我的关注
+            if (userFollows.boards.length > 0 || userFollows.sections.length > 0) {
+                const followTitle = document.createElement('div');
+                followTitle.className = 'nav-title';
+                followTitle.innerText = '我的关注';
+                boardListContainer.appendChild(followTitle);
+
+                userFollows.boards.forEach(b => {
+                    const el = document.createElement('div');
+                    el.className = 'nav-item';
+                    el.innerHTML = `<span class="nav-icon">⭐</span> ${b}`;
+                    el.onclick = () => loadBoard(b);
+                    boardListContainer.appendChild(el);
+                });
+
+                userFollows.sections.forEach(s => {
+                    const [b, sec] = s.split('/');
+                    const el = document.createElement('div');
+                    el.className = 'nav-item';
+                    el.innerHTML = `<span class="nav-icon">📍</span> ${sec}`;
+                    el.onclick = () => loadPosts(b, sec);
+                    boardListContainer.appendChild(el);
+                });
+            }
+
+            // 3. 所有板块
+            const allTitle = document.createElement('div');
+            allTitle.className = 'nav-title';
+            allTitle.innerText = '板块与分区';
+            boardListContainer.appendChild(allTitle);
+
+            for (const [board, sections] of Object.entries(boardStructure)) {
+                const boardEl = document.createElement('div');
+                boardEl.className = 'nav-item';
+                boardEl.innerHTML = `<span class="nav-icon">📁</span> ${board}`;
+                boardEl.onclick = (e) => {
+                    loadBoard(board);
+                    toggleSections(board, true);
+                    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+                    boardEl.classList.add('active');
+                };
+                boardListContainer.appendChild(boardEl);
+
+                const sectionContainer = document.createElement('div');
+                sectionContainer.id = `group-${board}`;
+                sectionContainer.style.display = 'none';
+                sectionContainer.style.paddingLeft = '20px';
+                
+                sections.forEach(section => {
+                    const secEl = document.createElement('div');
+                    secEl.className = 'nav-item';
+                    secEl.style.fontSize = '13px';
+                    secEl.innerText = section;
+                    secEl.onclick = () => loadPosts(board, section);
+                    sectionContainer.appendChild(secEl);
+                });
+                boardListContainer.appendChild(sectionContainer);
+            }
+        }
+
+        function toggleSections(board, forceOpen = false) {
+            const el = document.getElementById(`group-${board}`);
+            if(!el) return;
+            if (forceOpen) el.style.display = 'block';
+            else el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function extractFirstImage(content) {
+            if (!content) return null; // 防御性检查，防止 content 为空时崩溃
+            const imgRegex = /!\[.*?\]\((.*?)\)/;
+            const match = content.match(imgRegex);
+            return match ? match[1] : null;
+        }
+
+        function createPostCardHTML(post, category = "") {
+            const img = extractFirstImage(post.content);
+            const style = img ? `background-image: url('${img}'); background-size: cover;` : `background: linear-gradient(45deg, #0078d4, #00c6ff);`;
+            return `
+                <div class="fluent-card" onclick="showPostDetailWrapper('${post.filename}', '${post.board}', '${post.section}')">
+                    <div class="card-image" style="${style}"></div>
+                    <div class="card-overlay">
+                        <div class="card-category">${category || post.section}</div>
+                        <div class="card-title">${post.title}</div>
+                        <div class="card-desc">${post.author} • ${post.likes?.length || 0} ❤️</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function loadPage(pageType) {
+            currentView = pageType;
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+
+            await transitionTo(async () => {
+                const container = document.getElementById('main-container');
+                const res = await fetch('/api/all-posts');
+                const allPosts = await res.json();
+
+                if (pageType === 'today') {
+                    const todayStr = new Date().toLocaleDateString('zh-CN', { weekday: 'long', month: 'long', day: 'numeric' });
+                    const hotPosts = [...allPosts].sort((a,b) => (b.likes?.length||0) - (a.likes?.length||0)).slice(0, 3);
+                    const followedPosts = allPosts.filter(p => userFollows.sections.includes(`${p.board}/${p.section}`) || userFollows.boards.includes(p.board)).slice(0, 3);
+                    const latestPosts = [...allPosts].sort((a,b) => b.time - a.time).slice(0, 3);
+
+                    container.innerHTML = `
+                        <div class="hero-section">
+                            <span class="section-date">${todayStr}</span>
+                            <div class="section-title">Today</div>
+                            <div class="nav-title" style="margin: 30px 0 15px;">🔥 热门推荐</div>
+                            <div class="card-grid">${hotPosts.map(p => createPostCardHTML(p)).join('')}</div>
+                            ${followedPosts.length ? `
+                                <div class="nav-title" style="margin: 30px 0 15px;">⭐ 我的关注</div>
+                                <div class="card-grid">${followedPosts.map(p => createPostCardHTML(p)).join('')}</div>
+                            ` : ''}
+                            <div class="nav-title" style="margin: 30px 0 15px;">🚀 最新发布</div>
+                            <div class="list-view">
+                                ${latestPosts.map(p => `
+                                    <div class="list-item" onclick="showPostDetailWrapper('${p.filename}', '${p.board}', '${p.section}')">
+                                        <div class="list-icon">✨</div>
+                                        <div class="list-details"><div class="list-title">${p.title}</div><div class="list-subtitle">${p.board} / ${p.section}</div></div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                } else if (pageType === 'all-posts') {
+                    const latest = [...allPosts].sort((a,b) => b.time - a.time);
+                    container.innerHTML = `
+                        <div class="hero-section">
+                            <div class="section-title">最新发布</div>
+                            <div class="card-grid" style="margin-top:20px;">
+                                ${latest.map(p => createPostCardHTML(p)).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+        }
+
+        async function loadBoard(board) {
+            currentActiveBoard = board;
+            await transitionTo(async () => {
+                const container = document.getElementById('main-container');
+                const sections = boardStructure[board] || [];
+                const isFollowed = userFollows.boards.includes(board);
+                
+                const postsRes = await fetch('/api/all-posts');
+                const all = await postsRes.json();
+                const boardPosts = all.filter(p => p.board === board).sort((a,b) => (b.likes?.length||0) - (a.likes?.length||0)).slice(0, 3);
+
+                container.innerHTML = `
+                    <div class="hero-section">
+                        <span class="section-date">板块目录</span>
+                        <div class="section-header" style="padding:0; margin-bottom: 30px; align-items: center;">
+                            <div class="section-title">${board}</div>
+                            <div style="display:flex; gap:10px;">
+                                <button class="follow-btn" onclick="showManagement('${board}')">⚙️ 管理</button>
+                                <button class="follow-btn ${isFollowed ? 'active' : ''}" onclick="toggleFollow('board', '${board}', this)">
+                                    ${isFollowed ? '已关注' : '+ 关注板块'}
+                                </button>
+                            </div>
+                        </div>
+                        ${boardPosts.length ? `
+                            <div class="nav-title" style="margin-bottom: 15px;">🏆 热门帖子</div>
+                            <div class="card-grid" style="margin-bottom: 40px;">
+                                ${boardPosts.map(p => createPostCardHTML(p)).join('')}
+                            </div>
+                        ` : ''}
+                        <div class="nav-title" style="margin-bottom: 15px;">全部分区</div>
+                        <div class="card-grid">
+                            ${sections.map(sec => `
+                                <div class="fluent-card" onclick="loadPosts('${board}', '${sec}')" style="height: 180px; background: white;">
+                                    <div style="padding: 20px;">
+                                        <div class="card-category">Section</div>
+                                        <div class="card-title" style="color: #000; font-size: 24px;">${sec}</div>
+                                        <div class="card-desc" style="color: #666;">点击进入分区查看帖子</div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        async function loadPosts(board, section) {
+            currentActiveBoard = board;
+            await transitionTo(async () => {
+                const container = document.getElementById('main-container');
+                const target = `${board}/${section}`;
+                const isFollowed = userFollows.sections.includes(target);
+
+                const infoRes = await fetch(`/api/board/manage-info?board=${encodeURIComponent(board)}`);
+                const info = await infoRes.json();
+                const canManage = currentUser && (info.owner === currentUser.username || info.sectionAdmins?.[section]?.includes(currentUser.username));
+
+                container.innerHTML = `
+                    <div style="padding:40px;">
+                        <div class="back-btn" onclick="loadBoard('${board}')">← 返回 ${board}</div>
+                        <div class="section-header" style="padding:0; margin-bottom: 20px; align-items: center;">
+                            <div class="section-title">${section}</div>
+                            <div style="display:flex; gap:10px;">
+                                ${canManage ? `<button class="follow-btn" onclick="showManagement('${board}', '${section}')">⚙️ 管理</button>` : ''}
+                                <button class="follow-btn ${isFollowed ? 'active' : ''}" onclick="toggleFollow('section', '${target}', this)">
+                                    ${isFollowed ? '已关注' : '+ 关注分区'}
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-grid" id="top-posts-grid" style="margin-bottom: 30px; padding: 0;"></div>
+                        <div class="nav-title" style="margin-bottom: 15px;">所有帖子</div>
+                        <div class="list-view" id="post-list">加载中...</div>
+                    </div>
+                `;
+
+                const res = await fetch(`/api/posts?board=${encodeURIComponent(board)}&section=${encodeURIComponent(section)}`);
+                const posts = await res.json();
+                const list = document.getElementById('post-list');
+                const grid = document.getElementById('top-posts-grid');
+                
+                list.innerHTML = '';
+                if(posts.length === 0) { 
+                    list.innerHTML = '<div style="text-align:center; color:#888;">暂无帖子</div>'; 
+                    return; 
+                }
+
+                posts.sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0));
+
+                if (posts.length > 0 && posts[0].likes?.length > 0) {
+                    const topPost = posts[0];
+                    const img = extractFirstImage(topPost.content);
+                    const imgStyle = img ? `background-image: url('${img}'); background-size: cover;` : `background: linear-gradient(135deg, var(--primary-color), #005a9e);`;
+                    grid.innerHTML = `
+                        <div class="fluent-card highlight-post" onclick="showPostDetailWrapper('${topPost.filename}', '${board}', '${section}')">
+                            <div class="card-image" style="${imgStyle}"></div>
+                            <div class="card-overlay">
+                                <div class="card-category">🔥 热门推荐 • ${topPost.likes.length} 人点赞</div>
+                                <div class="card-title">${topPost.title}</div>
+                                <div class="card-desc">${topPost.author} 发布于 ${new Date(topPost.time).toLocaleDateString()}</div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    grid.style.display = 'none';
+                }
+
+                posts.forEach(post => {
+                    const item = document.createElement('div');
+                    item.className = 'list-item';
+                    item.onclick = () => showPostDetail(post, board, section);
+                    item.innerHTML = `
+                        <div class="list-icon">📝</div>
+                        <div class="list-details">
+                            <div class="list-title">${post.title}</div>
+                            <div class="list-subtitle">${post.author} • ${post.likes?.length || 0} 👍</div>
+                        </div>
+                        <div style="display:flex; gap:5px;">
+                            ${canManage ? `<button class="btn-get" style="color:red;" onclick="event.stopPropagation(); if(confirm('确定删除?')) updateManage('${board}', '${section}', 'deletePost', {filename: '${post.filename}'})">🗑️</button>` : ''}
+                            <button class="btn-get">查看</button>
+                        </div>`;
+                    list.appendChild(item);
+                });
+            });
+        }
+
+        // 权限等级辅助函数
+        function getPermLevel(user, board, section) {
+            if (!user) return 0;
+            if (user.isSuperAdmin) return 5;
+            // 前端仅作UI展示判断，后端有严格校验
+            return 1; 
+        }
+
+        async function handlePinPrompt(board, section, filename) {
+            const level = prompt("置顶级别? (today/board/section)", "section");
+            const hours = prompt("置顶时长(小时)? (-1为永久)", "24");
+            if(!level || !hours) return;
+            const res = await fetch('/api/post/pin', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ board, section, filename, level, duration: parseInt(hours) })
+            });
+            const data = await res.json();
+            if(data.success) alert("置顶成功"); else alert(data.error);
+        }
+
+        async function showPostDetailWrapper(filename, board, section) {
+            const res = await fetch(`/api/posts?board=${encodeURIComponent(board)}&section=${encodeURIComponent(section)}`);
+            const posts = await res.json();
+            const post = posts.find(p => p.filename === filename);
+            if(post) {
+                await showPostDetail(post, board, section);
+                // 异步获取此板块/分区的管理权限信息
+                const infoRes = await fetch(`/api/board/manage-info?board=${encodeURIComponent(board)}`);
+                const info = await infoRes.json();
+                const isSuper = currentUser && currentUser.isSuperAdmin;
+                const isOwner = currentUser && info.owner === currentUser.username;
+                const isSecAdmin = currentUser && info.sectionAdmins?.[section]?.includes(currentUser.username);
+                
+                if (isSuper || isOwner || isSecAdmin) {
+                    const pinBtn = document.getElementById('pin-btn');
+                    if(pinBtn) pinBtn.style.display = 'flex';
+                }
+            }
+        }
+
+        function showPostDetail(post, board, section) {
+            transitionTo(async () => {
+                const container = document.getElementById('main-container');
+                const htmlContent = marked.parse(post.content);
+                const isLiked = currentUser && post.likes?.includes(currentUser.username);
+                const likeCount = post.likes?.length || 0;
+
+                container.innerHTML = `
+                    <div class="post-detail-container">
+                        <div class="back-btn" onclick="loadPosts('${board}', '${section}')">← 返回分区</div>
+                        <div class="post-detail-title">${post.title}</div>
+                        <div class="post-meta">
+                            <span>👤 ${post.author}</span>
+                            <span style="margin: 0 10px;">•</span>
+                            <span>🕒 ${new Date(post.time).toLocaleString()}</span>
+                        </div>
+                        <div class="post-body">${htmlContent}</div>
+                        <div class="action-bar">
+                            <button id="pin-btn" class="action-btn" style="display:none;" onclick="handlePinPrompt('${board}','${section}','${post.filename}')">📌 置顶</button>
+                            <button class="action-btn ${isLiked ? 'active' : ''}" onclick="toggleLike('${board}', '${section}', '${post.filename}', this)">
+                                <span>${isLiked ? '❤️' : '🤍'}</span> 
+                                <span class="like-count">${likeCount}</span>
+                            </button>
+                            <button class="action-btn share" onclick="sharePost(this)">
+                                <span>🔗</span> 分享
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        let manageSearchQuery = "";
+
+        async function showManagement(board, section = null) {
+            const res = await fetch(`/api/board/manage-info?board=${encodeURIComponent(board)}`);
+            const info = await res.json();
+            
+            const modal = document.getElementById('manage-modal');
+            const body = document.getElementById('manage-body');
+            if(!modal || !body) return;
+            
+            document.getElementById('manage-title').innerText = section ? `分区管理: ${section}` : `板块管理: ${board}`;
+            modal.classList.add('active');
+
+            const currentBlacklist = section ? (info.sectionSettings?.[section]?.blacklist || []) : (info.blacklist || []);
+            const isMuted = section ? (info.sectionSettings?.[section]?.muted) : info.muted;
+
+            let html = `
+                <div class="form-group">
+                    <label>状态控制</label>
+                    <button class="btn-get" onclick="updateManage('${board}', ${section ? `'${section}'` : 'null'}, 'setMuted', {muted: ${!isMuted}})">
+                        ${isMuted ? '🔴 已禁言 (点击解除)' : '🟢 运行中 (点击禁言)'}
+                    </button>
+                </div>
+                <div class="form-group">
+                    <label>黑名单管理</label>
+                    <div style="display:flex; gap:10px; margin-bottom:10px;">
+                        <input type="text" id="bl-user" class="form-control" placeholder="输入用户名">
+                        <button class="btn-get" onclick="const u=document.getElementById('bl-user').value; if(u) updateManage('${board}', ${section ? `'${section}'` : 'null'}, 'updateBlacklist', {type:'add', user: u})">添加</button>
+                    </div>
+                    <div class="list-view">
+                        ${currentBlacklist.map(u => `<div class="list-item" style="padding:5px 15px;">${u} <button class="btn-get" style="color:red; margin-left:auto;" onclick="updateManage('${board}', ${section ? `'${section}'` : 'null'}, 'updateBlacklist', {type:'remove', user:'${u}'})">移除</button></div>`).join('')}
+                    </div>
+                </div>
+            `;
+
+            if (!section && currentUser && (info.owner === currentUser.username || currentUser.isSuperAdmin)) {
+                const sections = boardStructure[board] || [];
+                html += `
+                    <div class="form-group">
+                        <label>分区高级管理 (排序、图片、管理员)</label>
+                        <div class="list-view">
+                            ${sections.map((sec, index) => {
+                                const admins = info.sectionAdmins?.[sec] || [];
+                                return `
+                                <div class="list-item" style="flex-direction:column; align-items:flex-start; gap:10px; padding: 15px;">
+                                    <div style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
+                                        <div style="display:flex; align-items:center; gap:10px;">
+                                            <div style="display:flex; flex-direction:column; gap:2px;">
+                                                <button class="btn-get" style="padding:2px 5px; font-size:10px;" onclick="moveSection('${board}', ${index}, -1)" ${index === 0 ? 'disabled' : ''}>▲</button>
+                                                <button class="btn-get" style="padding:2px 5px; font-size:10px;" onclick="moveSection('${board}', ${index}, 1)" ${index === sections.length - 1 ? 'disabled' : ''}>▼</button>
+                                            </div>
+                                            <b>${sec}</b>
+                                        </div>
+                                        <button class="btn-get" style="font-size: 12px;" onclick="const u=prompt('输入要添加的管理员用户名:'); if(u) updateManage('${board}', '${sec}', 'manageSecAdmin', {type:'add', user: u})">➕ 添加管理员</button>
+                                    </div>
+                                    
+                                    <div style="display:flex; gap:10px; width:100%;">
+                                        <input type="text" class="form-control" placeholder="封面图链接" value="${info.sectionSettings?.[sec]?.image || ''}" onchange="updateManage('${board}', '${sec}', 'sectionConfig', {image: this.value})">
+                                    </div>
+
+                                    <div style="width:100%; display:flex; flex-wrap:wrap; gap:5px;">
+                                        <span style="font-size:12px; color:#666; width:100%;">现有管理员:</span>
+                                        ${admins.length > 0 ? admins.map(admin => `
+                                            <span class="nav-item" style="padding: 2px 8px; font-size: 12px; background: rgba(0,0,0,0.05); display: flex; align-items: center; gap: 5px;">
+                                                ${admin}
+                                                <span style="color:red; cursor:pointer; font-weight:bold;" onclick="if(confirm('移除管理员 ${admin} ?')) updateManage('${board}', '${sec}', 'manageSecAdmin', {type:'remove', user: '${admin}'})">×</span>
+                                            </span>
+                                        `).join('') : '<span style="font-size:12px; color:#999;">暂无</span>'}
+                                    </div>
+                                </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            body.innerHTML = html;
+        }
+
+        async function saveSettings() {
+            const nickname = document.getElementById('set-nickname').value;
+            const bio = document.getElementById('set-bio').value;
+            const res = await fetch('/api/user/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nickname, bio })
+            });
+            if((await res.json()).success) {
+                alert("设置已保存");
+                closeModal('settings-modal');
+            }
+        }
+
+        function showUserSettings() {
+            if(!currentUser) return location.href = '/login';
+            document.getElementById('settings-modal').classList.add('active');
+        }
+
+        async function createSectionInManage(board, name) {
+            const res = await fetch('/api/section', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ board, name })
+            });
+            const result = await res.json();
+            if(result.success) {
+                // alert("创建成功");
+                await loadStructure(); // 刷新侧边栏结构
+                showManagement(board); // 刷新管理界面
+            } else {
+                alert(result.error || "创建失败");
+            }
+        }
+
+        async function moveSection(board, index, direction) {
+            const sections = [...boardStructure[board]];
+            const newIndex = index + direction;
+            if (newIndex < 0 || newIndex >= sections.length) return;
+
+            // 交换位置
+            [sections[index], sections[newIndex]] = [sections[newIndex], sections[index]];
+
+            const res = await fetch('/api/manage/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    board, 
+                    section: null, 
+                    action: 'reorderSections', 
+                    data: { newOrder: sections } 
+                })
+            });
+            
+            if ((await res.json()).success) {
+                await loadStructure(); // 更新内存中的 boardStructure
+                showManagement(board); // 重新渲染管理界面
+            }
+        }
+
+        async function updateManage(board, section, action, data) {
+            const res = await fetch('/api/manage/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ board, section, action, data })
+            });
+            const result = await res.json();
+            if(result.success) {
+                // alert("操作成功");
+                if(action === 'deletePost') loadPosts(board, section);
+                else showManagement(board, section);
+            } else {
+                alert(result.error);
+            }
+        }
+
+        async function toggleLike(board, section, filename, btn) {
+            if(!currentUser) return alert('请先登录');
+            const res = await fetch('/api/post/like', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ board, section, filename })
+            });
+            const data = await res.json();
+            if(data.success) {
+                const countSpan = btn.querySelector('.like-count');
+                const iconSpan = btn.querySelector('span:first-child');
+                countSpan.innerText = data.count;
+                if(data.liked) { btn.classList.add('active'); iconSpan.innerText = '❤️'; }
+                else { btn.classList.remove('active'); iconSpan.innerText = '🤍'; }
+            } else { alert(data.error); }
+        }
+
+        async function sharePost(btn) {
+            const shareData = { title: document.title, text: '来看看百络谷上的这篇帖子！', url: window.location.href };
+            try {
+                if (navigator.share) await navigator.share(shareData);
+                else {
+                    await navigator.clipboard.writeText(window.location.href);
+                    const original = btn.innerHTML;
+                    btn.innerHTML = '<span>✅</span> 链接已复制';
+                    setTimeout(() => btn.innerHTML = original, 2000);
+                }
+            } catch (err) { console.log('Share failed', err); }
+        }
+
+        async function toggleFollow(type, target, btn) {
+            if(!currentUser) return alert('请先登录');
+            const res = await fetch('/api/user/follow', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type, target })
+            });
+            const data = await res.json();
+            if(data.success) {
+                if(data.isFollowing) {
+                    btn.classList.add('active');
+                    btn.innerText = '已关注';
+                    if(type === 'board') userFollows.boards.push(target);
+                    else userFollows.sections.push(target);
+                } else {
+                    btn.classList.remove('active');
+                    btn.innerText = type === 'board' ? '+ 关注板块' : '+ 关注分区';
+                    const list = type === 'board' ? userFollows.boards : userFollows.sections;
+                    const idx = list.indexOf(target);
+                    if(idx > -1) list.splice(idx, 1);
+                }
+            } else { alert(data.error); }
+        }
+
+        function toggleNewMenu() {
+            const menu = document.getElementById('new-menu');
+            menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+        }
+
+        async function showModal(id) {
+            if(!currentUser) return location.href = '/login';
+            document.getElementById('new-menu').style.display = 'none';
+            document.getElementById(id).classList.add('active');
+            if(id === 'section-modal') {
+                document.getElementById('current-board-name').innerText = currentActiveBoard;
+            }
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+        }
+
+        function showPostModal() {
+            if(!currentUser) return location.href = '/login';
+            document.getElementById('new-menu').style.display = 'none';
+            document.getElementById('post-modal').classList.add('active');
+            const boardSelect = document.getElementById('post-board-select');
+            boardSelect.innerHTML = '<option value="">选择板块</option>';
+            for(const board in boardStructure) {
+                boardSelect.innerHTML += `<option value="${board}">${board}</option>`;
+            }
+            if(currentActiveBoard) boardSelect.value = currentActiveBoard;
+            updateSectionSelect();
+        }
+
+        async function submitBoard() {
+            const name = document.getElementById('board-name').value;
+            if(!name) return;
+            const res = await fetch('/api/board', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            if((await res.json()).success) { location.reload(); } else { alert('创建失败'); }
+        }
+
+        async function submitSection() {
+            const name = document.getElementById('section-name').value;
+            if(!name || !currentActiveBoard) return;
+            const res = await fetch('/api/section', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ board: currentActiveBoard, name })
+            });
+            if((await res.json()).success) { location.reload(); } else { alert('创建失败'); }
+        }
+
+        function updateSectionSelect() {
+            const board = document.getElementById('post-board-select').value;
+            const sectionSelect = document.getElementById('post-section-select');
+            sectionSelect.innerHTML = '';
+            if(board && boardStructure[board]) {
+                boardStructure[board].forEach(sec => {
+                    sectionSelect.innerHTML += `<option value="${sec}">${sec}</option>`;
+                });
+            }
+        }
+
+        async function handleAutoUpload(input) {
+            if (!input.files || !input.files[0]) return;
+            const file = input.files[0];
+            const formData = new FormData();
+            formData.append('image', file);
+            const upRes = await fetch('/api/upload-proxy', { method: 'POST', body: formData });
+            const upData = await upRes.json();
+            if (upData.success) {
+                const textarea = document.getElementById('post-content');
+                textarea.value += `\n![${file.name}](${config.image_host}${upData.data.url})\n`;
+                input.value = '';
+            } else { alert('上传失败: ' + upData.message); }
+        }
+
+        async function submitPost() {
+            const board = document.getElementById('post-board-select').value;
+            const section = document.getElementById('post-section-select').value;
+            const title = document.getElementById('post-title').value;
+            const content = document.getElementById('post-content').value;
+            if (!board || !section || !title || !content) { alert('请填写完整信息'); return; }
+            const res = await fetch('/api/post', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ board, section, title, content })
+            });
+            const result = await res.json();
+            if (result.success) {
+                closeModal('post-modal');
+                document.getElementById('post-title').value = '';
+                document.getElementById('post-content').value = '';
+                // alert('发布成功！');
+                loadPosts(board, section);
+            } else { alert('发布失败: ' + result.error); }
+        }
+
+        // 处理搜索建议
+        async function handleSearchSuggest(q) {
+            const box = document.getElementById('search-suggest-box');
+            if (!q.trim()) {
+                box.style.display = 'none';
+                return;
+            }
+
+            const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+            const data = await res.json();
+            
+            // 合并结果展示在气泡中（取前8条）
+            let combined = [
+                ...data.users.slice(0, 2).map(u => ({ type: '👤', name: u.username, action: `alert('用户资料开发中')` })),
+                ...data.boards.slice(0, 2).map(b => ({ type: '📁', name: b.name, action: `loadBoard('${b.name}')` })),
+                ...data.sections.slice(0, 2).map(s => ({ type: '📍', name: s.name, action: `loadPosts('${s.board}', '${s.name}')` })),
+                ...data.posts.slice(0, 4).map(p => ({ type: '📝', name: p.title, action: `showPostDetailWrapper('${p.filename}', '${p.board}', '${p.section}')` }))
+            ];
+
+            if (combined.length === 0) {
+                box.innerHTML = '<div class="bubble-item" style="color:#999; font-size:13px;">未找到相关内容</div>';
+            } else {
+                box.innerHTML = combined.map(item => `
+                    <div class="bubble-item" onclick="${item.action}; document.getElementById('search-suggest-box').style.display='none';">
+                        <span class="bubble-icon" style="font-size:14px; width:20px;">${item.type}</span>
+                        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item.name}</span>
+                    </div>
+                `).join('') + `<div class="bubble-item" style="border-top:1px solid #eee; font-size:12px; color:var(--primary-color); justify-content:center;" onclick="executeFullSearch('${q}')">查看全部结果 (Enter)</div>`;
+            }
+            box.style.display = 'flex';
+        }
+
+        // 执行完整搜索页渲染
+        async function executeFullSearch(q) {
+            if (!q || !q.trim()) return;
+            // 隐藏建议框并清空输入框焦点
+            const suggestBox = document.getElementById('search-suggest-box');
+            if(suggestBox) suggestBox.style.display = 'none';
+            document.getElementById('global-search').blur();
+            
+            await transitionTo(async () => {
+                const container = document.getElementById('main-container');
+                const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+                const data = await res.json();
+
+                container.innerHTML = `
+                    <div class="hero-section">
+                        <span class="section-date">搜索结果</span>
+                        <div class="section-title">"${q}"</div>
+                        
+                        ${data.users.length ? `
+                            <div class="nav-title" style="margin-top:30px;">用户</div>
+                            <div class="list-view">${data.users.map(u => `<div class="list-item"><div class="list-icon">👤</div><div class="list-details"><b>${u.username}</b></div><button class="btn-get">主页</button></div>`).join('')}</div>
+                        ` : ''}
+
+                        ${data.boards.length || data.sections.length ? `
+                            <div class="nav-title" style="margin-top:30px;">板块与分区</div>
+                            <div class="card-grid">
+                                ${data.boards.map(b => `
+                                    <div class="fluent-card" style="height:120px; background:#fff;" onclick="loadBoard('${b.name}')">
+                                        <div style="padding:15px;"><div class="card-category">板块</div><div class="card-title" style="color:#000; font-size:18px;">${b.name}</div></div>
+                                    </div>
+                                `).join('')}
+                                ${data.sections.map(s => `
+                                    <div class="fluent-card" style="height:120px; background:#fff;" onclick="loadPosts('${s.board}', '${s.name}')">
+                                        <div style="padding:15px;"><div class="card-category">分区 @ ${s.board}</div><div class="card-title" style="color:#000; font-size:18px;">${s.name}</div></div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+
+                        <div class="nav-title" style="margin-top:30px;">帖子 (${data.posts.length})</div>
+                        <div class="card-grid">
+                            ${data.posts.map(p => createPostCardHTML(p)).join('')}
+                        </div>
+                        ${data.posts.length === 0 && !data.users.length ? '<div style="padding:50px; text-align:center; color:#999;">空空如也</div>' : ''}
+                    </div>
+                `;
+            });
+        }
+
+        const config = { image_host: "http://pcfs.eno.ink:28888" };
+    </script>
 </body>
 </html>
