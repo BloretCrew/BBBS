@@ -123,7 +123,17 @@
         .nav-icon {
             margin-right: 12px;
             width: 20px;
-            text-align: center;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .sf-icon {
+            width: 18px;
+            height: 18px;
+            vertical-align: middle;
+            object-fit: contain;
         }
 
         /* 用户区域在侧边栏底部 */
@@ -525,10 +535,10 @@
         <div class="nav-group">
             <div class="nav-title">发现</div>
             <a href="#" class="nav-item active" onclick="loadPage('today')">
-                <span class="nav-icon">📅</span> Today
+                <span class="nav-icon"><img src="https://img.bloret.net/SF/calendar?color=gray" class="sf-icon"></span> Today
             </a>
             <a href="#" class="nav-item" onclick="loadPage('all-posts')">
-                <span class="nav-icon">🚀</span> 最新发布
+                <span class="nav-icon"><img src="https://img.bloret.net/SF/sparkles?color=gray" class="sf-icon"></span> 最新发布
             </a>
         </div>
 
@@ -544,10 +554,11 @@
         </div>
 
         <div id="user-bubble-menu" class="bubble-menu" style="display: none; bottom: 80px; left: 15px; min-width: 220px; transform-origin: bottom left;">
-            <div class="bubble-item" onclick="showUserSettings()"><span class="bubble-icon">⚙️</span> 用户设置</div>
-            <div class="bubble-item" onclick="window.open('${config.passport_host}')"><span class="bubble-icon">🆔</span> Bloret PassPort</div>
+            <div class="bubble-item" onclick="showUserSettings()"><span class="bubble-icon"><img src="https://img.bloret.net/SF/gearshape?color=black" class="sf-icon"></span> 用户设置</div>
+            <div class="bubble-item" onclick="showUserPermissions()"><span class="bubble-icon"><img src="https://img.bloret.net/SF/shield?color=black" class="sf-icon"></span> 显示所有权限</div>
+            <div class="bubble-item" onclick="window.open('${config.passport_host}')"><span class="bubble-icon"><img src="https://img.bloret.net/SF/person.badge.key?color=black" class="sf-icon"></span> Bloret PassPort</div>
             <div style="height:1px; background:rgba(0,0,0,0.05); margin:5px 0;"></div>
-            <div class="bubble-item" style="color:#ff3b30;" onclick="location.href='/logout'"><span class="bubble-icon">🚪</span> 退出登录</div>
+            <div class="bubble-item" style="color:#ff3b30;" onclick="location.href='/logout'"><span class="bubble-icon"><img src="https://img.bloret.net/SF/door.right.hand.open?color=red" class="sf-icon"></span> 退出登录</div>
         </div>
     </div>
 
@@ -619,6 +630,120 @@
             <div class="modal-footer">
                 <button onclick="closeModal('settings-modal')" class="btn-get">取消</button>
                 <button onclick="saveSettings()" class="btn-get" style="background: var(--primary-color); color: white;">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 权限展示模态框 -->
+    <div class="modal" id="permissions-modal">
+        <div class="modal-content">
+            <h2>我的权限概览</h2>
+            <div id="permissions-body" style="margin: 20px 0; max-height: 60vh; overflow-y: auto;">
+                加载中...
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeModal('permissions-modal')" class="btn-get">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通用交互对话框 (Alert/Confirm/Prompt) -->
+    <div class="modal" id="dialog-modal">
+        <div class="modal-content" style="width: 400px;">
+            <h2 id="dialog-title">提示</h2>
+            <p id="dialog-message" style="color: var(--text-secondary); line-height: 1.5;"></p>
+            <div id="dialog-prompt-container" style="display: none; margin-top: 15px;">
+                <input type="text" id="dialog-input" class="form-control" placeholder="">
+            </div>
+            <div class="modal-footer" id="dialog-footer">
+                <!-- 动态填充按钮 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑帖子模态框 -->
+    <div class="modal" id="edit-post-modal">
+        <div class="modal-content">
+            <h2>编辑帖子</h2>
+            <div class="form-group">
+                <label>标题</label>
+                <input type="text" id="edit-post-title" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>内容</label>
+                <textarea id="edit-post-content" class="form-control" style="height: 300px;"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeModal('edit-post-modal')" class="btn-get">取消</button>
+                <button id="edit-post-submit" class="btn-get" style="background: var(--primary-color); color: white;">保存修改</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 移动帖子模态框 -->
+    <div class="modal" id="move-post-modal">
+        <div class="modal-content" style="width: 400px;">
+            <h2>移动帖子</h2>
+            <div class="form-group">
+                <label>选择目标板块</label>
+                <select id="move-board-select" class="form-control" onchange="updateMoveSectionSelect()"></select>
+                <label style="margin-top:10px;">选择目标分区</label>
+                <select id="move-section-select" class="form-control"></select>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeModal('move-post-modal')" class="btn-get">取消</button>
+                <button id="move-post-submit" class="btn-get" style="background: var(--primary-color); color: white;">确认移动</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 查看旧版本模态框 -->
+    <div class="modal" id="version-modal">
+        <div class="modal-content">
+            <h2>帖子历史版本</h2>
+            <div id="version-content" style="background: #f8f9fa; padding: 15px; border-radius: 8px; max-height: 400px; overflow-y: auto; white-space: pre-wrap; font-family: monospace;"></div>
+            <div class="modal-footer">
+                <button onclick="closeModal('version-modal')" class="btn-get">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 帖子置顶专用模态框 -->
+    <div class="modal" id="pin-modal">
+        <div class="modal-content" style="width: 400px;">
+            <h2>帖子置顶设置</h2>
+            <div class="form-group">
+                <label>置顶级别</label>
+                <select id="pin-level" class="form-control">
+                    <option value="section">分区置顶 (本分区可见)</option>
+                    <option value="board">板块置顶 (全板块可见)</option>
+                    <option value="today">首页置顶 (Today 页面可见)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>置顶时长</label>
+                <select id="pin-duration-type" class="form-control" onchange="togglePinDurationInput()">
+                    <option value="forever">永久置顶</option>
+                    <option value="custom">设定时间</option>
+                </select>
+            </div>
+            <div id="pin-custom-time-group" class="form-group" style="display: none;">
+                <label>持续时间</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="number" id="pin-duration-value" class="form-control" value="24" style="flex: 1;">
+                    <select id="pin-duration-unit" class="form-control" style="width: 80px;">
+                        <option value="y">年</option>
+                        <option value="M">月</option>
+                        <option value="d">日</option>
+                        <option value="h" selected>时</option>
+                        <option value="m">分</option>
+                        <option value="s">秒</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeModal('pin-modal')" class="btn-get">取消</button>
+                <button id="pin-submit-btn" class="btn-get" style="background: var(--primary-color); color: white;">确认置顶</button>
             </div>
         </div>
     </div>
@@ -726,8 +851,10 @@
         function renderUserZone() {
             const zone = document.getElementById('user-zone');
             if (currentUser) {
+                // 优先使用 PassPort 头像，否则使用生成的文字头像
+                const avatarUrl = currentUser.avatar || `https://ui-avatars.com/api/?name=${currentUser.username}&background=random`;
                 zone.innerHTML = `
-                    <img src="https://ui-avatars.com/api/?name=${currentUser.username}&background=random" alt="Avatar">
+                    <img src="${avatarUrl}" alt="Avatar">
                     <div class="user-info-text">
                         <div>${currentUser.username}</div>
                         <div style="font-size:11px; color:#888;">点击管理账户</div>
@@ -783,7 +910,7 @@
             // 1. 排行榜入口
             const discoverItem = document.createElement('div');
             discoverItem.className = 'nav-item';
-            discoverItem.innerHTML = '<span class="nav-icon">🏆</span> 排行榜';
+            discoverItem.innerHTML = '<span class="nav-icon"><img src="https://img.bloret.net/SF/trophy?color=gray" class="sf-icon"></span> 排行榜';
             discoverItem.onclick = loadLeaderboard;
             boardListContainer.appendChild(discoverItem);
             
@@ -797,7 +924,7 @@
                 userFollows.boards.forEach(b => {
                     const el = document.createElement('div');
                     el.className = 'nav-item';
-                    el.innerHTML = `<span class="nav-icon">⭐</span> ${b}`;
+                    el.innerHTML = `<span class="nav-icon"><img src="https://img.bloret.net/SF/star.fill?color=%23FFD700" class="sf-icon"></span> ${b}`;
                     el.onclick = () => loadBoard(b);
                     boardListContainer.appendChild(el);
                 });
@@ -806,7 +933,7 @@
                     const [b, sec] = s.split('/');
                     const el = document.createElement('div');
                     el.className = 'nav-item';
-                    el.innerHTML = `<span class="nav-icon">📍</span> ${sec}`;
+                    el.innerHTML = `<span class="nav-icon"><img src="https://img.bloret.net/SF/mappin.and.ellipse?color=gray" class="sf-icon"></span> ${sec}`;
                     el.onclick = () => loadPosts(b, sec);
                     boardListContainer.appendChild(el);
                 });
@@ -821,7 +948,7 @@
             for (const [board, sections] of Object.entries(boardStructure)) {
                 const boardEl = document.createElement('div');
                 boardEl.className = 'nav-item';
-                boardEl.innerHTML = `<span class="nav-icon">📁</span> ${board}`;
+                boardEl.innerHTML = `<span class="nav-icon"><img src="https://img.bloret.net/SF/folder?color=gray" class="sf-icon"></span> ${board}`;
                 boardEl.onclick = (e) => {
                     loadBoard(board);
                     toggleSections(board, true);
@@ -861,6 +988,13 @@
             return match ? match[1] : null;
         }
 
+        // 校验置顶是否有效
+        function isPinned(post, targetLevel) {
+            if (!post.pinned || post.pinned.level !== targetLevel) return false;
+            if (post.pinned.expireAt === -1) return true; // 永久置顶
+            return post.pinned.expireAt > Date.now(); // 未过期
+        }
+
         function createPostCardHTML(post, category = "") {
             const img = extractFirstImage(post.content);
             const style = img ? `background-image: url('${img}'); background-size: cover;` : `background: linear-gradient(45deg, #0078d4, #00c6ff);`;
@@ -887,7 +1021,15 @@
 
                 if (pageType === 'today') {
                     const todayStr = new Date().toLocaleDateString('zh-CN', { weekday: 'long', month: 'long', day: 'numeric' });
-                    const hotPosts = [...allPosts].sort((a,b) => (b.likes?.length||0) - (a.likes?.length||0)).slice(0, 3);
+                    
+                    // 获取置顶帖
+                    const pinnedToday = allPosts.filter(p => isPinned(p, 'today'));
+                    // 热门推荐（排除掉已经置顶的，避免重复出现）
+                    const hotPosts = allPosts
+                        .filter(p => !pinnedToday.find(pin => pin.filename === p.filename))
+                        .sort((a,b) => (b.likes?.length||0) - (a.likes?.length||0))
+                        .slice(0, 3);
+                    
                     const followedPosts = allPosts.filter(p => userFollows.sections.includes(`${p.board}/${p.section}`) || userFollows.boards.includes(p.board)).slice(0, 3);
                     const latestPosts = [...allPosts].sort((a,b) => b.time - a.time).slice(0, 3);
 
@@ -895,6 +1037,12 @@
                         <div class="hero-section">
                             <span class="section-date">${todayStr}</span>
                             <div class="section-title">Today</div>
+                            
+                            ${pinnedToday.length ? `
+                                <div class="nav-title" style="margin: 30px 0 15px;">📌 全站置顶</div>
+                                <div class="card-grid" style="margin-bottom:20px;">${pinnedToday.map(p => createPostCardHTML(p)).join('')}</div>
+                            ` : ''}
+
                             <div class="nav-title" style="margin: 30px 0 15px;">🔥 热门推荐</div>
                             <div class="card-grid">${hotPosts.map(p => createPostCardHTML(p)).join('')}</div>
                             ${followedPosts.length ? `
@@ -935,9 +1083,36 @@
                 
                 const postsRes = await fetch('/api/all-posts');
                 const all = await postsRes.json();
-                const boardPosts = all.filter(p => p.board === board).sort((a,b) => (b.likes?.length||0) - (a.likes?.length||0)).slice(0, 3);
+                
+                // 本板块置顶
+                const pinnedBoard = all.filter(p => p.board === board && isPinned(p, 'board'));
+                // 本板块热门
+                const boardPosts = all
+                    .filter(p => p.board === board && !pinnedBoard.find(pin => pin.filename === p.filename))
+                    .sort((a,b) => (b.likes?.length||0) - (a.likes?.length||0))
+                    .slice(0, 3);
 
                 container.innerHTML = `
+                    <div class="hero-section">
+                        <span class="section-date">板块目录</span>
+                        <div class="section-header" style="padding:0; margin-bottom: 30px; align-items: center;">
+                            <div class="section-title">${board}</div>
+                            <div style="display:flex; gap:10px;">
+                                <button class="follow-btn" onclick="showManagement('${board}')">⚙️ 管理</button>
+                                <button class="follow-btn ${isFollowed ? 'active' : ''}" onclick="toggleFollow('board', '${board}', this)">
+                                    ${isFollowed ? '已关注' : '+ 关注板块'}
+                                </button>
+                            </div>
+                        </div>
+
+                        ${pinnedBoard.length ? `
+                            <div class="nav-title" style="margin-bottom: 15px;">📌 板块置顶</div>
+                            <div class="card-grid" style="margin-bottom: 30px;">
+                                ${pinnedBoard.map(p => createPostCardHTML(p)).join('')}
+                            </div>
+                        ` : ''}
+
+                        ${boardPosts.length ? `
                     <div class="hero-section">
                         <span class="section-date">板块目录</span>
                         <div class="section-header" style="padding:0; margin-bottom: 30px; align-items: center;">
@@ -968,6 +1143,7 @@
                             `).join('')}
                         </div>
                     </div>
+                ` : ''}
                 `;
             });
         }
@@ -1012,10 +1188,18 @@
                     return; 
                 }
 
-                posts.sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0));
+                // 排序逻辑：置顶帖在前，其余按点赞数排
+                posts.sort((a, b) => {
+                    const pinA = isPinned(a, 'section') ? 1 : 0;
+                    const pinB = isPinned(b, 'section') ? 1 : 0;
+                    if (pinA !== pinB) return pinB - pinA;
+                    return (b.likes?.length || 0) - (a.likes?.length || 0);
+                });
 
-                if (posts.length > 0 && posts[0].likes?.length > 0) {
+                // 获取当前分区最高亮的帖子（如果是置顶则选置顶，否则选最高赞）
+                if (posts.length > 0) {
                     const topPost = posts[0];
+                    const isSecPinned = isPinned(topPost, 'section');
                     const img = extractFirstImage(topPost.content);
                     const imgStyle = img ? `background-image: url('${img}'); background-size: cover;` : `background: linear-gradient(135deg, var(--primary-color), #005a9e);`;
                     grid.innerHTML = `
@@ -1036,17 +1220,29 @@
                     const item = document.createElement('div');
                     item.className = 'list-item';
                     item.onclick = () => showPostDetail(post, board, section);
+                    const isSecPinned = isPinned(post, 'section');
                     item.innerHTML = `
-                        <div class="list-icon">📝</div>
+                        <div class="list-icon">
+                            <img src="https://img.bloret.net/SF/${isSecPinned ? 'pin.fill' : 'square.and.pencil'}?color=gray" class="sf-icon" style="width:24px; height:24px;">
+                        </div>
                         <div class="list-details">
-                            <div class="list-title">${post.title}</div>
-                            <div class="list-subtitle">${post.author} • ${post.likes?.length || 0} 👍</div>
+                            <div class="list-title">${isSecPinned ? '<span style="color:var(--primary-color)">[置顶]</span> ' : ''}${post.title}</div>
+                            <div class="list-subtitle">${post.author} • ${post.likes?.length || 0} <img src="https://img.bloret.net/SF/hand.thumbsup.fill?color=gray" class="sf-icon" style="width:12px; height:12px; margin-bottom:2px;"></div>
                         </div>
                         <div style="display:flex; gap:5px;">
-                            ${canManage ? `<button class="btn-get" style="color:red;" onclick="event.stopPropagation(); if(confirm('确定删除?')) updateManage('${board}', '${section}', 'deletePost', {filename: '${post.filename}'})">🗑️</button>` : ''}
+                            ${canManage ? `<button class="btn-get" style="color:red;" id="del-btn-${post.filename.replace('.','-')}">🗑️</button>` : ''}
                             <button class="btn-get">查看</button>
                         </div>`;
                     list.appendChild(item);
+                    
+                    if (canManage) {
+                        document.getElementById(`del-btn-${post.filename.replace('.','-')}`).onclick = (e) => {
+                            e.stopPropagation();
+                            Dialog.confirm('确定要删除这篇帖子吗？', () => {
+                                updateManage(board, section, 'deletePost', { filename: post.filename });
+                            });
+                        };
+                    }
                 });
             });
         }
@@ -1059,17 +1255,99 @@
             return 1; 
         }
 
+        // 通用对话框工具
+        const Dialog = {
+            show: (options) => {
+                const modal = document.getElementById('dialog-modal');
+                const title = document.getElementById('dialog-title');
+                const message = document.getElementById('dialog-message');
+                const promptContainer = document.getElementById('dialog-prompt-container');
+                const input = document.getElementById('dialog-input');
+                const footer = document.getElementById('dialog-footer');
+
+                title.innerText = options.title || '提示';
+                message.innerText = options.message || '';
+                
+                if (options.type === 'prompt') {
+                    promptContainer.style.display = 'block';
+                    input.value = options.defaultValue || '';
+                    input.placeholder = options.placeholder || '';
+                } else {
+                    promptContainer.style.display = 'none';
+                }
+
+                footer.innerHTML = '';
+                if (options.type === 'confirm' || options.type === 'prompt') {
+                    const cancelBtn = document.createElement('button');
+                    cancelBtn.className = 'btn-get';
+                    cancelBtn.innerText = '取消';
+                    cancelBtn.onclick = () => { closeModal('dialog-modal'); if(options.onCancel) options.onCancel(); };
+                    footer.appendChild(cancelBtn);
+                }
+
+                const okBtn = document.createElement('button');
+                okBtn.className = 'btn-get';
+                okBtn.style.background = 'var(--primary-color)';
+                okBtn.style.color = 'white';
+                okBtn.innerText = '确定';
+                okBtn.onclick = () => {
+                    const val = input.value;
+                    closeModal('dialog-modal');
+                    if(options.onConfirm) options.onConfirm(val);
+                };
+                footer.appendChild(okBtn);
+
+                modal.classList.add('active');
+            },
+            alert: (msg, title = '提示') => Dialog.show({ type: 'alert', title, message: msg }),
+            confirm: (msg, onConfirm, title = '请确认') => Dialog.show({ type: 'confirm', title, message: msg, onConfirm }),
+            prompt: (msg, defaultValue, onConfirm, title = '输入') => Dialog.show({ type: 'prompt', title, message: msg, defaultValue, onConfirm })
+        };
+
+        function togglePinDurationInput() {
+            const type = document.getElementById('pin-duration-type').value;
+            document.getElementById('pin-custom-time-group').style.display = type === 'custom' ? 'block' : 'none';
+        }
+
         async function handlePinPrompt(board, section, filename) {
-            const level = prompt("置顶级别? (today/board/section)", "section");
-            const hours = prompt("置顶时长(小时)? (-1为永久)", "24");
-            if(!level || !hours) return;
-            const res = await fetch('/api/post/pin', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ board, section, filename, level, duration: parseInt(hours) })
-            });
-            const data = await res.json();
-            if(data.success) alert("置顶成功"); else alert(data.error);
+            const modal = document.getElementById('pin-modal');
+            modal.classList.add('active');
+            
+            document.getElementById('pin-submit-btn').onclick = async () => {
+                const level = document.getElementById('pin-level').value;
+                const durationType = document.getElementById('pin-duration-type').value;
+                
+                let finalHours = -1; // 默认永久
+
+                if (durationType === 'custom') {
+                    const value = parseFloat(document.getElementById('pin-duration-value').value);
+                    const unit = document.getElementById('pin-duration-unit').value;
+                    
+                    if (isNaN(value) || value <= 0) {
+                        Dialog.alert("请输入有效的数值");
+                        return;
+                    }
+
+                    // 换算为小时 (后端要求单位为小时)
+                    switch(unit) {
+                        case 's': finalHours = value / 3600; break;
+                        case 'm': finalHours = value / 60; break;
+                        case 'h': finalHours = value; break;
+                        case 'd': finalHours = value * 24; break;
+                        case 'M': finalHours = value * 24 * 30.44; break; // 平均月
+                        case 'y': finalHours = value * 24 * 365.25; break; // 平均年
+                    }
+                }
+                
+                const res = await fetch('/api/post/pin', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ board, section, filename, level, duration: finalHours })
+                });
+                const data = await res.json();
+                closeModal('pin-modal');
+                if(data.success) Dialog.alert("置顶成功"); else Dialog.alert(data.error);
+            };
         }
 
         async function showPostDetailWrapper(filename, board, section) {
@@ -1093,35 +1371,159 @@
         }
 
         function showPostDetail(post, board, section) {
-            transitionTo(async () => {
+            return transitionTo(async () => {
                 const container = document.getElementById('main-container');
+                const infoRes = await fetch(`/api/board/manage-info?board=${encodeURIComponent(board)}`);
+                const info = await infoRes.json();
+                const perm = getPermLevel(currentUser?.username, board, section);
+                const canEdit = currentUser && (currentUser.username === post.author || perm >= PERMS.SEC_ADMIN);
+
                 const htmlContent = marked.parse(post.content);
                 const isLiked = currentUser && post.likes?.includes(currentUser.username);
-                const likeCount = post.likes?.length || 0;
+                
+                // 合并时间轴数据：历史记录 + 评论
+                let timeline = [];
+                if (post.history) timeline.push(...post.history.map(h => ({ ...h, isHistory: true })));
+                if (post.comments) timeline.push(...post.comments.map(c => ({ ...c, isComment: true })));
+                timeline.sort((a, b) => a.time - b.time);
 
                 container.innerHTML = `
                     <div class="post-detail-container">
                         <div class="back-btn" onclick="loadPosts('${board}', '${section}')">← 返回分区</div>
-                        <div class="post-detail-title">${post.title}</div>
-                        <div class="post-meta">
-                            <span>👤 ${post.author}</span>
-                            <span style="margin: 0 10px;">•</span>
-                            <span>🕒 ${new Date(post.time).toLocaleString()}</span>
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                            <div class="post-detail-title">${post.title}</div>
+                            ${canEdit ? `
+                                <div style="display:flex; gap:10px;">
+                                    <button class="follow-btn" onclick="handleEditPost('${board}','${section}','${post.filename}')">编辑</button>
+                                    <button class="follow-btn" onclick="handleMovePost('${board}','${section}','${post.filename}')">移动</button>
+                                </div>
+                            ` : ''}
                         </div>
-                        <div class="post-body">${htmlContent}</div>
+                        <div class="post-meta" style="align-items: center; gap: 8px;">
+                            <img src="${post.author_avatar || `https://ui-avatars.com/api/?name=${post.author}`}" style="width:20px; height:20px; border-radius:50%;">
+                            <span>${post.author}</span> • <span>🕒 ${new Date(post.time).toLocaleString()}</span>
+                        </div>
+                        <div class="post-body" style="margin-bottom:40px;">${htmlContent}</div>
+                        
                         <div class="action-bar">
-                            <button id="pin-btn" class="action-btn" style="display:none;" onclick="handlePinPrompt('${board}','${section}','${post.filename}')">📌 置顶</button>
+                            <button id="pin-btn" class="action-btn" style="display:none;" onclick="handlePinPrompt('${board}','${section}','${post.filename}')">
+                                <img src="https://img.bloret.net/SF/pin?color=black" class="sf-icon" style="margin-right:6px;"> 置顶
+                            </button>
                             <button class="action-btn ${isLiked ? 'active' : ''}" onclick="toggleLike('${board}', '${section}', '${post.filename}', this)">
-                                <span>${isLiked ? '❤️' : '🤍'}</span> 
-                                <span class="like-count">${likeCount}</span>
+                                <img src="https://img.bloret.net/SF/heart${isLiked ? '.fill' : ''}?color=${isLiked ? 'red' : 'black'}" class="sf-icon" style="margin-right:6px;"> 
+                                <span class="like-count">${post.likes?.length || 0}</span>
                             </button>
                             <button class="action-btn share" onclick="sharePost(this)">
-                                <span>🔗</span> 分享
+                                <img src="https://img.bloret.net/SF/square.and.arrow.up?color=black" class="sf-icon" style="margin-right:6px;"> 分享
                             </button>
+                        </div>
+
+                        <!-- 时间轴 (GitHub 风格) -->
+                        <div style="margin-top: 50px; border-left: 2px solid #e1e4e8; padding-left: 30px; margin-left: 20px;">
+                            ${timeline.map(item => {
+                                if (item.isComment) {
+                                    const commentAvatar = item.author_avatar || `https://ui-avatars.com/api/?name=${item.author}`;
+                                    return `
+                                        <div style="position:relative; margin-bottom: 30px;">
+                                            <div style="position:absolute; left:-41px; top:0;"><img src="${commentAvatar}" style="width:24px; height:24px; border-radius:50%; border:2px solid white; object-fit: cover;"></div>
+                                            <div style="border: 1px solid #d1d5da; border-radius: 6px; background: white;">
+                                                <div style="padding: 10px; background: #f6f8fa; border-bottom: 1px solid #d1d5da; font-size:13px;">
+                                                    <b>${item.author}</b> 评论于 ${new Date(item.time).toLocaleString()}
+                                                </div>
+                                                <div style="padding: 15px; font-size:15px;">${marked.parse(item.content)}</div>
+                                            </div>
+                                        </div>`;
+                                } else {
+                                    let iconName = "circle", iconColor = "gray", text = "";
+                                    let clickAttr = "";
+                                    switch(item.type) {
+                                        case 'publish': iconName = "paperplane.fill"; iconColor = "%230078d4"; text = `<b>${item.user}</b> 发布了这篇帖子`; break;
+                                        case 'edit': 
+                                            iconName = "pencil"; text = `<b>${item.user}</b> 编辑了内容`; 
+                                            clickAttr = `onclick="showOldVersion('${btoa(unescape(encodeURIComponent(item.oldContent)))}')" style="cursor:pointer; text-decoration:underline;"`;
+                                            break;
+                                        case 'move': iconName = "shippingbox.fill"; text = `<b>${item.user}</b> 将帖子从 ${item.from} 移动到 ${item.to}`; break;
+                                        case 'pin': iconName = "pin.fill"; iconColor = "%23FF9500"; text = `<b>${item.user}</b> 置顶了帖子 (${item.level})`; break;
+                                        case 'like': iconName = "heart.fill"; iconColor = "red"; text = `<b>${item.user}</b> 点赞了帖子`; break;
+                                    }
+                                    return `
+                                        <div style="position:relative; margin-bottom: 20px; font-size:14px; color:#586069; display:flex; align-items:center;">
+                                            <span style="position:absolute; left:-41px; background:white; width:20px; height:20px; display:flex; align-items:center; justify-content:center;">
+                                                <img src="https://img.bloret.net/SF/${iconName}?color=${iconColor}" class="sf-icon" style="width:14px; height:14px;">
+                                            </span>
+                                            <span ${clickAttr}>${text}</span> <small style="margin-left:8px;">• ${new Date(item.time).toLocaleTimeString()}</small>
+                                        </div>`;
+                                }
+                            }).join('')}
+                        </div>
+
+                        <!-- 评论输入框 -->
+                        <div style="margin-top: 30px; padding-left: 50px;">
+                            <textarea id="comment-input" class="form-control" placeholder="撰写评论... (支持 Markdown)" style="height: 100px;"></textarea>
+                            <button class="btn-get" style="margin-top: 10px; background: var(--primary-color); color: white;" onclick="submitComment('${board}','${section}','${post.filename}')">发表评论</button>
                         </div>
                     </div>
                 `;
             });
+        }
+
+        // 处理函数
+        function showOldVersion(encodedContent) {
+            const content = decodeURIComponent(escape(atob(encodedContent)));
+            document.getElementById('version-content').innerText = content;
+            document.getElementById('version-modal').classList.add('active');
+        }
+
+        async function handleEditPost(board, section, filename) {
+            const res = await fetch(`/api/posts?board=${encodeURIComponent(board)}&section=${encodeURIComponent(section)}`);
+            const post = (await res.json()).find(p => p.filename === filename);
+            document.getElementById('edit-post-title').value = post.title;
+            document.getElementById('edit-post-content').value = post.content;
+            document.getElementById('edit-post-modal').classList.add('active');
+            document.getElementById('edit-post-submit').onclick = async () => {
+                const title = document.getElementById('edit-post-title').value;
+                const content = document.getElementById('edit-post-content').value;
+                const upRes = await fetch('/api/post/edit', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ board, section, filename, title, content })
+                });
+                if ((await upRes.json()).success) location.reload();
+            };
+        }
+
+        async function handleMovePost(board, section, filename) {
+            const bSelect = document.getElementById('move-board-select');
+            bSelect.innerHTML = Object.keys(boardStructure).map(b => `<option value="${b}">${b}</option>`).join('');
+            updateMoveSectionSelect();
+            document.getElementById('move-post-modal').classList.add('active');
+            document.getElementById('move-post-submit').onclick = async () => {
+                const newBoard = bSelect.value;
+                const newSection = document.getElementById('move-section-select').value;
+                const moveRes = await fetch('/api/post/move', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ board, section, filename, newBoard, newSection })
+                });
+                if ((await moveRes.json()).success) loadPosts(newBoard, newSection);
+            };
+        }
+
+        function updateMoveSectionSelect() {
+            const b = document.getElementById('move-board-select').value;
+            const sSelect = document.getElementById('move-section-select');
+            sSelect.innerHTML = boardStructure[b].map(s => `<option value="${s}">${s}</option>`).join('');
+        }
+
+        async function submitComment(board, section, filename) {
+            const content = document.getElementById('comment-input').value;
+            if(!content) return;
+            const res = await fetch('/api/comment/add', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ board, section, filename, content })
+            });
+            if((await res.json()).success) showPostDetailWrapper(filename, board, section);
         }
 
         let manageSearchQuery = "";
@@ -1140,7 +1542,21 @@
             const currentBlacklist = section ? (info.sectionSettings?.[section]?.blacklist || []) : (info.blacklist || []);
             const isMuted = section ? (info.sectionSettings?.[section]?.muted) : info.muted;
 
-            let html = `
+            let html = ``;
+
+            if (!section && currentUser && currentUser.isSuperAdmin) {
+                html += `
+                    <div class="form-group" style="background: #fff4f4; padding: 15px; border-radius: 8px; border: 1px solid #ffe0e0; margin-bottom: 20px;">
+                        <label style="color: #d83b01; font-weight: bold;">⚠️ 超级管理员高级操作</label>
+                        <div style="display:flex; gap:10px; margin-top: 10px;">
+                            <button class="btn-get" style="background: #d83b01; color: white;" onclick="renameBoardPrompt('${board}')">更名板块</button>
+                            <button class="btn-get" style="background: #a4262c; color: white;" onclick="deleteBoardPrompt('${board}')">删除板块</button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `
                 <div class="form-group">
                     <label>状态控制</label>
                     <button class="btn-get" onclick="updateManage('${board}', ${section ? `'${section}'` : 'null'}, 'setMuted', {muted: ${!isMuted}})">
@@ -1154,10 +1570,18 @@
                         <button class="btn-get" onclick="const u=document.getElementById('bl-user').value; if(u) updateManage('${board}', ${section ? `'${section}'` : 'null'}, 'updateBlacklist', {type:'add', user: u})">添加</button>
                     </div>
                     <div class="list-view">
-                        ${currentBlacklist.map(u => `<div class="list-item" style="padding:5px 15px;">${u} <button class="btn-get" style="color:red; margin-left:auto;" onclick="updateManage('${board}', ${section ? `'${section}'` : 'null'}, 'updateBlacklist', {type:'remove', user:'${u}'})">移除</button></div>`).join('')}
+                        ${currentBlacklist.map(u => `<div class="list-item" style="padding:5px 15px;">${u} <button class="btn-get" style="color:red; margin-left:auto;" id="bl-remove-${u}">移除</button></div>`).join('')}
                     </div>
                 </div>
             `;
+
+            // 手动绑定黑名单移除事件
+            setTimeout(() => {
+                currentBlacklist.forEach(u => {
+                    const btn = document.getElementById(`bl-remove-${u}`);
+                    if(btn) btn.onclick = () => Dialog.confirm(`确定将 ${u} 移出黑名单吗？`, () => updateManage(board, section, 'updateBlacklist', {type:'remove', user: u}));
+                });
+            }, 100);
 
             if (!section && currentUser && (info.owner === currentUser.username || currentUser.isSuperAdmin)) {
                 const sections = boardStructure[board] || [];
@@ -1177,7 +1601,7 @@
                                             </div>
                                             <b>${sec}</b>
                                         </div>
-                                        <button class="btn-get" style="font-size: 12px;" onclick="const u=prompt('输入要添加的管理员用户名:'); if(u) updateManage('${board}', '${sec}', 'manageSecAdmin', {type:'add', user: u})">➕ 添加管理员</button>
+                                        <button class="btn-get" style="font-size: 12px;" id="add-admin-${sec}">➕ 添加管理员</button>
                                     </div>
                                     
                                     <div style="display:flex; gap:10px; width:100%;">
@@ -1189,7 +1613,7 @@
                                         ${admins.length > 0 ? admins.map(admin => `
                                             <span class="nav-item" style="padding: 2px 8px; font-size: 12px; background: rgba(0,0,0,0.05); display: flex; align-items: center; gap: 5px;">
                                                 ${admin}
-                                                <span style="color:red; cursor:pointer; font-weight:bold;" onclick="if(confirm('移除管理员 ${admin} ?')) updateManage('${board}', '${sec}', 'manageSecAdmin', {type:'remove', user: '${admin}'})">×</span>
+                                                <span style="color:red; cursor:pointer; font-weight:bold;" id="rem-admin-${sec}-${admin}">×</span>
                                             </span>
                                         `).join('') : '<span style="font-size:12px; color:#999;">暂无</span>'}
                                     </div>
@@ -1199,6 +1623,19 @@
                         </div>
                     </div>
                 `;
+                
+                // 手动绑定分区管理员操作事件
+                setTimeout(() => {
+                    sections.forEach(sec => {
+                        const addBtn = document.getElementById(`add-admin-${sec}`);
+                        if(addBtn) addBtn.onclick = () => Dialog.prompt(`请输入要添加给 ${sec} 的管理员用户名:`, '', (u) => { if(u) updateManage(board, sec, 'manageSecAdmin', {type:'add', user: u}) });
+                        
+                        (info.sectionAdmins?.[sec] || []).forEach(admin => {
+                            const remBtn = document.getElementById(`rem-admin-${sec}-${admin}`);
+                            if(remBtn) remBtn.onclick = () => Dialog.confirm(`确定移除管理员 ${admin} 吗？`, () => updateManage(board, sec, 'manageSecAdmin', {type:'remove', user: admin}));
+                        });
+                    });
+                }, 100);
             }
             body.innerHTML = html;
         }
@@ -1212,7 +1649,7 @@
                 body: JSON.stringify({ nickname, bio })
             });
             if((await res.json()).success) {
-                alert("设置已保存");
+                Dialog.alert("设置已保存");
                 closeModal('settings-modal');
             }
         }
@@ -1220,6 +1657,68 @@
         function showUserSettings() {
             if(!currentUser) return location.href = '/login';
             document.getElementById('settings-modal').classList.add('active');
+        }
+
+        async function showUserPermissions() {
+            if(!currentUser) return location.href = '/login';
+            document.querySelectorAll('.bubble-menu').forEach(m => m.style.display = 'none');
+            document.getElementById('permissions-modal').classList.add('active');
+            
+            const body = document.getElementById('permissions-body');
+            body.innerHTML = '加载中...';
+            
+            try {
+                const res = await fetch('/api/user/permissions');
+                const data = await res.json();
+                
+                if (data.error) {
+                    body.innerHTML = `<div style="color:red">${data.error}</div>`;
+                    return;
+                }
+                
+                let html = '';
+                
+                if (data.isSuperAdmin) {
+                     html += `<div style="padding: 10px; background: #ffe0e0; color: #ff3b30; border-radius: 8px; margin-bottom: 15px; font-weight: bold;">👑 您是系统超级管理员</div>`;
+                }
+                
+                html += `<div class="nav-title" style="margin: 10px 0;">创建的板块 (Owner)</div>`;
+                if (data.ownedBoards.length > 0) {
+                    html += `<div class="list-view">`;
+                    data.ownedBoards.forEach(b => {
+                        html += `<div class="list-item" style="padding: 8px 15px; cursor:default;"><div class="list-icon" style="width: 30px; height: 30px; font-size: 14px;">👑</div><div class="list-details"><b>${b}</b></div><button class="btn-get" onclick="closeModal('permissions-modal'); loadBoard('${b}'); showManagement('${b}')">管理</button></div>`;
+                    });
+                    html += `</div>`;
+                } else {
+                    html += `<div style="color: #999; font-size: 13px; margin-bottom: 10px; padding-left:10px;">无</div>`;
+                }
+
+                html += `<div class="nav-title" style="margin: 10px 0;">管理的板块 (Admin)</div>`;
+                if (data.adminBoards.length > 0) {
+                    html += `<div class="list-view">`;
+                    data.adminBoards.forEach(b => {
+                        html += `<div class="list-item" style="padding: 8px 15px; cursor:default;"><div class="list-icon" style="width: 30px; height: 30px; font-size: 14px;">🛡️</div><div class="list-details"><b>${b}</b></div><button class="btn-get" onclick="closeModal('permissions-modal'); loadBoard('${b}'); showManagement('${b}')">管理</button></div>`;
+                    });
+                    html += `</div>`;
+                } else {
+                    html += `<div style="color: #999; font-size: 13px; margin-bottom: 10px; padding-left:10px;">无</div>`;
+                }
+
+                html += `<div class="nav-title" style="margin: 10px 0;">管理的分区 (Section Admin)</div>`;
+                if (data.sectionAdmins.length > 0) {
+                    html += `<div class="list-view">`;
+                    data.sectionAdmins.forEach(item => {
+                        html += `<div class="list-item" style="padding: 8px 15px; cursor:default;"><div class="list-icon" style="width: 30px; height: 30px; font-size: 14px;">📍</div><div class="list-details"><b>${item.section}</b> <span style="font-size:12px; color:#888;">(${item.board})</span></div><button class="btn-get" onclick="closeModal('permissions-modal'); loadPosts('${item.board}', '${item.section}'); showManagement('${item.board}', '${item.section}')">管理</button></div>`;
+                    });
+                    html += `</div>`;
+                } else {
+                    html += `<div style="color: #999; font-size: 13px; margin-bottom: 10px; padding-left:10px;">无</div>`;
+                }
+
+                body.innerHTML = html;
+            } catch (e) {
+                body.innerHTML = `<div style="color:red">加载失败: ${e.message}</div>`;
+            }
         }
 
         async function createSectionInManage(board, name) {
@@ -1275,12 +1774,12 @@
                 if(action === 'deletePost') loadPosts(board, section);
                 else showManagement(board, section);
             } else {
-                alert(result.error);
+                Dialog.alert(result.error);
             }
         }
 
         async function toggleLike(board, section, filename, btn) {
-            if(!currentUser) return alert('请先登录');
+            if(!currentUser) return Dialog.alert('请先登录');
             const res = await fetch('/api/post/like', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1293,7 +1792,7 @@
                 countSpan.innerText = data.count;
                 if(data.liked) { btn.classList.add('active'); iconSpan.innerText = '❤️'; }
                 else { btn.classList.remove('active'); iconSpan.innerText = '🤍'; }
-            } else { alert(data.error); }
+            } else { Dialog.alert(data.error); }
         }
 
         async function sharePost(btn) {
@@ -1310,7 +1809,7 @@
         }
 
         async function toggleFollow(type, target, btn) {
-            if(!currentUser) return alert('请先登录');
+            if(!currentUser) return Dialog.alert('请先登录');
             const res = await fetch('/api/user/follow', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1330,7 +1829,7 @@
                     const idx = list.indexOf(target);
                     if(idx > -1) list.splice(idx, 1);
                 }
-            } else { alert(data.error); }
+            } else { Dialog.alert(data.error); }
         }
 
         function toggleNewMenu() {
@@ -1430,6 +1929,42 @@
                 // alert('发布成功！');
                 loadPosts(board, section);
             } else { alert('发布失败: ' + result.error); }
+        }
+
+        async function renameBoardPrompt(oldName) {
+            const newName = prompt("请输入板块的新名称:", oldName);
+            if (!newName || newName === oldName) return;
+            const res = await fetch('/api/board/rename', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ oldName, newName })
+            });
+            const result = await res.json();
+            if (result.success) {
+                location.reload();
+            } else {
+                alert(result.error);
+            }
+        }
+
+        async function deleteBoardPrompt(board) {
+            if (!confirm(`警告：确定要删除板块 "${board}" 吗？此操作将删除该板块下的所有分区和帖子，且不可恢复！`)) return;
+            const confirmName = prompt(`请输入板块名称 "${board}" 以确认删除:`);
+            if (confirmName !== board) {
+                alert("确认名称不匹配，操作取消。");
+                return;
+            }
+            const res = await fetch('/api/board/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ board })
+            });
+            const result = await res.json();
+            if (result.success) {
+                location.reload();
+            } else {
+                alert(result.error);
+            }
         }
 
         // 处理搜索建议

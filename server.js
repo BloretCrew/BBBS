@@ -116,6 +116,44 @@ app.get('/api/user', (req, res) => {
     res.json(user);
 });
 
+// 新增 API: 获取用户所有权限
+app.get('/api/user/permissions', (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: '请先登录' });
+    const username = req.session.user.username;
+    
+    const result = {
+        isSuperAdmin: config.super_admins?.includes(username) || false,
+        ownedBoards: [],
+        adminBoards: [],
+        sectionAdmins: []
+    };
+
+    try {
+        const boards = fs.readdirSync(config.data_dir);
+        boards.forEach(board => {
+            const boardPath = path.join(config.data_dir, board);
+            if (!fs.statSync(boardPath).isDirectory()) return;
+
+            const infoFile = path.join(boardPath, 'owner.json');
+            if (fs.existsSync(infoFile)) {
+                try {
+                    const info = JSON.parse(fs.readFileSync(infoFile, 'utf8'));
+                    if (info.owner === username) result.ownedBoards.push(board);
+                    if (info.admins?.includes(username)) result.adminBoards.push(board);
+                    if (info.sectionAdmins) {
+                        Object.entries(info.sectionAdmins).forEach(([sec, admins]) => {
+                            if (admins.includes(username)) result.sectionAdmins.push({ board, section: sec });
+                        });
+                    }
+                } catch (e) {}
+            }
+        });
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.get('/logout', (req, res) => {
     req.session = null;
     res.redirect('/');
@@ -396,6 +434,35 @@ app.post('/api/board', (req, res) => {
     res.json({ success: true });
 });
 
+app.post('/api/board/rename', (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: '请先登录' });
+    if (!config.super_admins?.includes(req.session.user.username)) return res.status(403).json({ error: '仅限超级管理员' });
+    const { oldName, newName } = req.body;
+    if (!newName || newName.includes('..')) return res.status(400).json({ error: '无效名称' });
+    const oldPath = path.join(config.data_dir, oldName);
+    const newPath = path.join(config.data_dir, newName);
+    if (fs.existsSync(newPath)) return res.status(400).json({ error: '新名称已存在' });
+    if (fs.existsSync(oldPath)) {
+        fs.renameSync(oldPath, newPath);
+        res.json({ success: true });
+    } else {
+        res.status(404).json({ error: '原板块不存在' });
+    }
+});
+
+app.post('/api/board/delete', (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: '请先登录' });
+    if (!config.super_admins?.includes(req.session.user.username)) return res.status(403).json({ error: '仅限超级管理员' });
+    const { board } = req.body;
+    const boardPath = path.join(config.data_dir, board);
+    if (fs.existsSync(boardPath)) {
+        fs.rmSync(boardPath, { recursive: true, force: true });
+        res.json({ success: true });
+    } else {
+        res.status(404).json({ error: '板块不存在' });
+    }
+});
+
 // 新建分区 (仅限板块创建者)
 app.post('/api/section', (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: '请先登录' });
@@ -414,14 +481,11 @@ app.post('/api/post', (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: '请先登录' });
     const { board, section, title, content, tags } = req.body;
     
-    // 权限校验
     const infoFile = path.join(config.data_dir, board, 'owner.json');
     if (fs.existsSync(infoFile)) {
         const info = JSON.parse(fs.readFileSync(infoFile, 'utf8'));
         const user = req.session.user.username;
-        // 检查禁言
         if (info.muted || info.sectionSettings?.[section]?.muted) return res.status(403).json({ error: '该版块/分区目前处于禁言状态' });
-        // 检查黑名单
         if (info.blacklist?.includes(user) || info.sectionSettings?.[section]?.blacklist?.includes(user)) {
             return res.status(403).json({ error: '您已被列入黑名单，无法操作' });
         }
@@ -429,17 +493,106 @@ app.post('/api/post', (req, res) => {
     if (board.includes('..') || section.includes('..')) return res.status(400).json({ error: 'Invalid path' });
     const dirPath = path.join(config.data_dir, board, section);
     if (!fs.existsSync(dirPath)) return res.status(400).json({ error: '分区不存在' });
-    const filename = `${Date.now()}_${Math.random().toString(36).substr(2, 5)}.json`;
+    
+    const now = Date.now();
+    const filename = `${now}_${Math.random().toString(36).substr(2, 5)}.json`;
     const postData = {
         title,
         content,
         author: req.session.user.username,
+        author_avatar: req.session.user.avatar, // 存储发帖人头像
         author_email: req.session.user.email,
-        time: Date.now(),
-        tags: tags || []
+        time: now,
+        tags: tags || [],
+        history: [{ type: 'publish', user: req.session.user.username, time: now }],
+        comments: []
     };
     fs.writeFileSync(path.join(dirPath, filename), JSON.stringify(postData));
     res.json({ success: true, filename });
+});
+
+// 编辑帖子 API
+app.post('/api/post/edit', (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: '请先登录' });
+    const { board, section, filename, title, content } = req.body;
+    const filePath = path.join(config.data_dir, board, section, filename);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: '帖子不存在' });
+
+    const post = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    const perm = getPermLevel(req.session.user.username, board, section);
+    
+    if (req.session.user.username !== post.author && perm < PERMS.SEC_ADMIN) {
+        return res.status(403).json({ error: '权限不足' });
+    }
+
+    const now = Date.now();
+    if (!post.history) post.history = [];
+    // 记录编辑历史，保存旧版本内容
+    post.history.push({
+        type: 'edit',
+        user: req.session.user.username,
+        time: now,
+        oldTitle: post.title,
+        oldContent: post.content
+    });
+
+    post.title = title;
+    post.content = content;
+    fs.writeFileSync(filePath, JSON.stringify(post));
+    res.json({ success: true });
+});
+
+// 移动帖子 API
+app.post('/api/post/move', (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: '请先登录' });
+    const { board, section, filename, newBoard, newSection } = req.body;
+    const oldPath = path.join(config.data_dir, board, section, filename);
+    const newDir = path.join(config.data_dir, newBoard, newSection);
+    const newPath = path.join(newDir, filename);
+
+    if (!fs.existsSync(oldPath)) return res.status(404).json({ error: '帖子不存在' });
+    if (!fs.existsSync(newDir)) return res.status(404).json({ error: '目标分区不存在' });
+
+    const post = JSON.parse(fs.readFileSync(oldPath, 'utf8'));
+    const perm = getPermLevel(req.session.user.username, board, section);
+    
+    if (req.session.user.username !== post.author && perm < PERMS.SEC_ADMIN) {
+        return res.status(403).json({ error: '权限不足' });
+    }
+
+    if (!post.history) post.history = [];
+    post.history.push({
+        type: 'move',
+        user: req.session.user.username,
+        time: Date.now(),
+        from: `${board}/${section}`,
+        to: `${newBoard}/${newSection}`
+    });
+
+    fs.renameSync(oldPath, newPath);
+    fs.writeFileSync(newPath, JSON.stringify(post));
+    res.json({ success: true });
+});
+
+// 发表评论 API
+app.post('/api/comment/add', (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: '请先登录' });
+    const { board, section, filename, content } = req.body;
+    const filePath = path.join(config.data_dir, board, section, filename);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: '帖子不存在' });
+
+    const post = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    if (!post.comments) post.comments = [];
+    
+    post.comments.push({
+        author: req.session.user.username,
+        author_avatar: req.session.user.avatar, // 存储评论人头像
+        content: content,
+        time: Date.now()
+    });
+
+    fs.writeFileSync(filePath, JSON.stringify(post));
+    res.json({ success: true });
 });
 
 // --- 完善 API: 全局深度搜索 ---
@@ -568,18 +721,27 @@ function getPermLevel(username, board, section) {
 // 帖子置顶 API
 app.post('/api/post/pin', (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: '请先登录' });
-    const { board, section, filename, level, duration } = req.body; // level: 'today', 'board', 'section'
+    const { board, section, filename, level, duration } = req.body;
     const user = req.session.user.username;
     const perm = getPermLevel(user, board, section);
 
-    // 校验权限
     if (level === 'today' && perm < PERMS.SUPER) return res.status(403).json({ error: '权限不足以置顶到首页' });
     if (level === 'board' && perm < PERMS.BOARD_ADMIN) return res.status(403).json({ error: '权限不足以置顶到板块' });
     if (level === 'section' && perm < PERMS.SEC_ADMIN) return res.status(403).json({ error: '权限不足以置顶到分区' });
 
     const filePath = path.join(config.data_dir, board, section, filename);
     const post = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    
     post.pinned = { level, expireAt: duration === -1 ? -1 : Date.now() + duration * 3600000 };
+    
+    if (!post.history) post.history = [];
+    post.history.push({
+        type: 'pin',
+        user: req.session.user.username,
+        time: Date.now(),
+        level: level
+    });
+
     fs.writeFileSync(filePath, JSON.stringify(post));
     res.json({ success: true });
 });
