@@ -120,7 +120,7 @@ app.get('/api/user', (req, res) => {
 app.get('/api/user/permissions', (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: '请先登录' });
     const username = req.session.user.username;
-    
+
     const result = {
         isSuperAdmin: config.super_admins?.includes(username) || false,
         ownedBoards: [],
@@ -145,7 +145,7 @@ app.get('/api/user/permissions', (req, res) => {
                             if (admins.includes(username)) result.sectionAdmins.push({ board, section: sec });
                         });
                     }
-                } catch (e) {}
+                } catch (e) { }
             }
         });
         res.json(result);
@@ -178,7 +178,7 @@ app.get('/api/structure', (req, res) => {
                 }
 
                 const actualSections = fs.readdirSync(boardPath).filter(f => fs.statSync(path.join(boardPath, f)).isDirectory());
-                
+
                 // 按照 orderedSections 排序，没在排序列表里的放后面
                 actualSections.sort((a, b) => {
                     const idxA = orderedSections.indexOf(a);
@@ -236,7 +236,7 @@ app.get('/api/all-posts', (req, res) => {
                 try {
                     const content = JSON.parse(fs.readFileSync(path.join(sectionPath, file), 'utf8'));
                     allPosts.push({ ...content, board, section, filename: file });
-                } catch (e) {}
+                } catch (e) { }
             });
         });
     });
@@ -269,17 +269,17 @@ app.post('/api/post/like', (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: '请先登录' });
     const { board, section, filename } = req.body;
     const filePath = path.join(config.data_dir, board, section, filename);
-    
+
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: '帖子不存在' });
-    
+
     try {
         const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
         if (!content.likes) content.likes = [];
         if (!content.history) content.history = [];
-        
+
         const username = req.session.user.username;
         const index = content.likes.indexOf(username);
-        
+
         let liked = false;
         if (index === -1) {
             content.likes.push(username);
@@ -289,7 +289,7 @@ app.post('/api/post/like', (req, res) => {
             content.likes.splice(index, 1);
             liked = false;
         }
-        
+
         fs.writeFileSync(filePath, JSON.stringify(content));
         res.json({ success: true, liked, count: content.likes.length });
     } catch (e) {
@@ -304,11 +304,11 @@ app.post('/api/user/follow', (req, res) => {
     const { type, target } = req.body; // type: 'board' or 'section', target: 'BoardName' or 'BoardName/SectionName'
     const username = req.session.user.username;
     const userFile = path.join(userDir, `${username}.json`);
-    
+
     let userData = { following: { boards: [], sections: [] } };
     if (fs.existsSync(userFile)) {
         userData = JSON.parse(fs.readFileSync(userFile, 'utf8'));
-        if(!userData.following) userData.following = { boards: [], sections: [] };
+        if (!userData.following) userData.following = { boards: [], sections: [] };
     }
 
     const list = type === 'board' ? userData.following.boards : userData.following.sections;
@@ -410,6 +410,23 @@ app.post('/api/manage/update', (req, res) => {
                 delete info.sectionSettings[section];
             }
             break;
+        case 'deleteSection': // 删除分区 (仅Owner)
+            if (!isOwner) return res.status(403).json({ error: '仅限创建者' });
+            const secPath = path.join(config.data_dir, board, data.sectionName);
+            if (fs.existsSync(secPath)) {
+                try {
+                    fs.rmSync(secPath, { recursive: true, force: true });
+                    // 清理元数据
+                    if (info.sectionsOrder) info.sectionsOrder = info.sectionsOrder.filter(s => s !== data.sectionName);
+                    if (info.sectionAdmins && info.sectionAdmins[data.sectionName]) delete info.sectionAdmins[data.sectionName];
+                    if (info.sectionSettings && info.sectionSettings[data.sectionName]) delete info.sectionSettings[data.sectionName];
+                } catch (e) {
+                    return res.status(500).json({ error: '删除失败: ' + e.message });
+                }
+            } else {
+                return res.status(404).json({ error: '分区不存在' });
+            }
+            break;
         case 'deletePost': // 删除帖子
             const postPath = path.join(config.data_dir, board, section, data.filename);
             if (fs.existsSync(postPath)) fs.unlinkSync(postPath);
@@ -457,9 +474,16 @@ app.post('/api/board/delete', (req, res) => {
     if (!config.super_admins?.includes(req.session.user.username)) return res.status(403).json({ error: '仅限超级管理员' });
     const { board } = req.body;
     const boardPath = path.join(config.data_dir, board);
+
     if (fs.existsSync(boardPath)) {
-        fs.rmSync(boardPath, { recursive: true, force: true });
-        res.json({ success: true });
+        try {
+            // 使用递归删除，并捕获可能的权限或占用错误
+            fs.rmSync(boardPath, { recursive: true, force: true });
+            res.json({ success: true });
+        } catch (e) {
+            console.error("Delete Board Error:", e);
+            res.status(500).json({ error: '删除失败: 文件夹可能被占用或权限不足' });
+        }
     } else {
         res.status(404).json({ error: '板块不存在' });
     }
@@ -470,10 +494,10 @@ app.post('/api/section', (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: '请先登录' });
     const { board, name } = req.body;
     const username = req.session.user.username;
-    
+
     const ownerFile = path.join(config.data_dir, board, 'owner.json');
     if (!fs.existsSync(ownerFile)) return res.status(403).json({ error: '无法验证所有权' });
-    
+
     const info = JSON.parse(fs.readFileSync(ownerFile, 'utf8'));
     const isSuper = config.super_admins?.includes(username);
     const isOwner = info.owner === username;
@@ -492,7 +516,7 @@ app.post('/api/section', (req, res) => {
 app.post('/api/post', (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: '请先登录' });
     const { board, section, title, content, tags } = req.body;
-    
+
     const infoFile = path.join(config.data_dir, board, 'owner.json');
     if (fs.existsSync(infoFile)) {
         const info = JSON.parse(fs.readFileSync(infoFile, 'utf8'));
@@ -505,7 +529,7 @@ app.post('/api/post', (req, res) => {
     if (board.includes('..') || section.includes('..')) return res.status(400).json({ error: 'Invalid path' });
     const dirPath = path.join(config.data_dir, board, section);
     if (!fs.existsSync(dirPath)) return res.status(400).json({ error: '分区不存在' });
-    
+
     const now = Date.now();
     const filename = `${now}_${Math.random().toString(36).substr(2, 5)}.json`;
     const postData = {
@@ -532,7 +556,7 @@ app.post('/api/post/edit', (req, res) => {
 
     const post = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     const perm = getPermLevel(req.session.user.username, board, section);
-    
+
     if (req.session.user.username !== post.author && perm < PERMS.SEC_ADMIN) {
         return res.status(403).json({ error: '权限不足' });
     }
@@ -567,7 +591,7 @@ app.post('/api/post/move', (req, res) => {
 
     const post = JSON.parse(fs.readFileSync(oldPath, 'utf8'));
     const perm = getPermLevel(req.session.user.username, board, section);
-    
+
     if (req.session.user.username !== post.author && perm < PERMS.SEC_ADMIN) {
         return res.status(403).json({ error: '权限不足' });
     }
@@ -609,7 +633,7 @@ app.post('/api/comment/add', (req, res) => {
 
     const post = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     if (!post.comments) post.comments = [];
-    
+
     post.comments.push({
         author: req.session.user.username,
         author_avatar: req.session.user.avatar, // 存储评论人头像
@@ -632,7 +656,7 @@ app.post('/api/post/vote', (req, res) => {
     if (!post.votes) post.votes = {}; // 结构: { "选项A": ["user1", "user2"], "选项B": [] }
 
     const username = req.session.user.username;
-    
+
     // 检查是否投过票（单选逻辑）
     for (let opt in post.votes) {
         if (post.votes[opt].includes(username)) {
@@ -668,7 +692,7 @@ app.get('/api/search', (req, res) => {
     boards.forEach(board => {
         const boardPath = path.join(config.data_dir, board);
         if (!fs.statSync(boardPath).isDirectory()) return;
-        
+
         if (board.toLowerCase().includes(query)) {
             results.boards.push({ name: board });
         }
@@ -677,7 +701,7 @@ app.get('/api/search', (req, res) => {
         sections.forEach(section => {
             const sectionPath = path.join(boardPath, section);
             if (!fs.statSync(sectionPath).isDirectory()) return;
-            
+
             if (section.toLowerCase().includes(query)) {
                 results.sections.push({ name: section, board: board });
             }
@@ -692,12 +716,12 @@ app.get('/api/search', (req, res) => {
                         results.posts.push({
                             board, section, filename: file,
                             title: content.title, author: content.author,
-                            time: content.time, 
+                            time: content.time,
                             preview: content.content.substring(0, 50) + "...",
                             content: content.content // 必须包含此项，否则前端提取图片会崩溃
                         });
                     }
-                } catch (e) {}
+                } catch (e) { }
             });
         });
     });
@@ -747,7 +771,7 @@ app.get('/api/user/profile/:username', (req, res) => {
                             time: p.time
                         });
                     }
-                } catch (e) {}
+                } catch (e) { }
             });
         });
     });
@@ -786,9 +810,9 @@ app.post('/api/post/pin', (req, res) => {
 
     const filePath = path.join(config.data_dir, board, section, filename);
     const post = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    
+
     post.pinned = { level, expireAt: duration === -1 ? -1 : Date.now() + duration * 3600000 };
-    
+
     if (!post.history) post.history = [];
     post.history.push({
         type: 'pin',
@@ -848,7 +872,7 @@ app.get('/api/system/stats', (req, res) => {
         if (!fs.statSync(boardPath).isDirectory()) return;
         const sections = fs.readdirSync(boardPath).filter(s => fs.statSync(path.join(boardPath, s)).isDirectory());
         totalSections += sections.length;
-        
+
         sections.forEach(section => {
             const files = fs.readdirSync(path.join(boardPath, section));
             totalPosts += files.filter(f => f.endsWith('.json') && f !== 'owner.json').length;
