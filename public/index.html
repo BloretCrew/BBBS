@@ -676,6 +676,118 @@
             justify-content: space-between;
             font-weight: 500;
         }
+
+        /* 来自 index.css 的卡片样式，用于 AI 总结 */
+        .post {
+            background: rgba(255, 255, 255, 0.85);
+            border-radius: 8px;
+            box-shadow: 0 1.6px 3.6px rgba(0, 0, 0, 0.1),
+                0 0.3px 0.9px rgba(0, 0, 0, 0.05),
+                0 0 0 1px rgba(0, 0, 0, 0.05) inset;
+            padding: 18px 18px 14px 18px;
+            margin: 20px 0;
+            backdrop-filter: blur(30px) saturate(120%);
+            -webkit-backdrop-filter: blur(30px) saturate(120%);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: visible;
+            transform: translateZ(0);
+        }
+
+        .post-title {
+            font-size: 1.2em;
+            margin-bottom: 10px;
+            text-align: left;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #000;
+        }
+
+        .post-content {
+            margin-bottom: 10px;
+            color: #000;
+        }
+
+        .post-time {
+            font-size: 0.9em;
+            color: #666;
+            margin-left: auto;
+        }
+
+        /* 管理模态框侧边栏样式 */
+        .manage-layout {
+            display: flex;
+            height: 600px;
+            overflow: hidden;
+            border-radius: 12px;
+            background: #f5f5f7;
+        }
+
+        .manage-sidebar {
+            width: 200px;
+            background: #fff;
+            border-right: 1px solid #eee;
+            display: flex;
+            flex-direction: column;
+            padding: 15px 0;
+        }
+
+        .manage-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #fff;
+        }
+
+        .manage-nav-item {
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .manage-nav-item:hover {
+            background: #f0f0f0;
+        }
+
+        .manage-nav-item.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        /* 排行榜筛选器样式 */
+        .filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .filter-btn {
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            background: #fff;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .filter-btn.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
     </style>
 </head>
 
@@ -950,18 +1062,29 @@
 
     <!-- 管理中心模态框 -->
     <div class="modal" id="manage-modal">
-        <div class="modal-content" style="width: 800px; max-height: 80vh; overflow-y: auto;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <h2 id="manage-title">管理中心</h2>
-                <input type="text" id="manage-search" placeholder="搜索项目..." class="form-control" style="width:200px;"
-                    oninput="handleManageSearch(this.value)">
-            </div>
-            <div id="manage-body" style="margin-top:20px;">
-                <!-- 动态填充管理内容 -->
-            </div>
-            <div id="manage-pagination" class="pagination-bar"></div>
-            <div class="modal-footer">
-                <button onclick="closeModal('manage-modal')" class="btn-get">关闭</button>
+        <div class="modal-content" style="width: 1000px; padding: 0; overflow: hidden; max-width: 95vw;">
+            <div id="manage-layout" class="manage-layout">
+                <div class="manage-sidebar">
+                    <div style="padding: 10px 15px; border-bottom: 1px solid #eee; margin-bottom: 10px;">
+                        <input type="text" id="manage-sidebar-search" class="form-control" placeholder="搜索功能/分区..."
+                            oninput="handleManageSearch(this.value)">
+                    </div>
+                    <div id="manage-nav-list" style="flex:1; overflow-y:auto;">
+                        <!-- 动态生成导航项 -->
+                    </div>
+                </div>
+                <div class="manage-content">
+                    <div
+                        style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                        <h2 id="manage-title" style="margin:0;">管理中心</h2>
+                        <button onclick="closeModal('manage-modal')" class="btn-get"
+                            style="background:#eee;">关闭</button>
+                    </div>
+                    <div id="manage-body">
+                        <!-- 动态内容 -->
+                    </div>
+                    <div id="manage-pagination" class="pagination-bar" style="margin-top:20px;"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -1081,6 +1204,49 @@
                 container.style.opacity = '1';
                 container.style.transform = 'translateY(0)';
             });
+        }
+
+        // 渲染 AI 每日总结
+        async function renderDailySummary() {
+            try {
+                const targetContainer = document.getElementById('ai-summary-placeholder');
+                if (!targetContainer) {
+                    console.log("AI Summary placeholder not found");
+                    return;
+                }
+
+                const res = await fetch('/api/summary');
+                const summary = await res.json();
+
+                if (summary && summary.content) {
+                    const todayDate = new Date().toDateString();
+                    // 仅当总结日期是今天才显示
+                    if (summary.date === todayDate) {
+                        const summaryDiv = document.createElement('div');
+                        // 现在 index.html 中已经有了 .post 相关的样式定义
+                        summaryDiv.className = 'post';
+
+                        // 覆盖一些布局属性以适应 Today 页面
+                        summaryDiv.style.flex = 'none';
+                        summaryDiv.style.width = 'calc(100% - 80px)';
+                        summaryDiv.style.margin = '0 40px 30px 40px';
+                        summaryDiv.style.cursor = 'default';
+
+                        summaryDiv.innerHTML = `
+                            <div class="post-title">
+                                <img src="https://img.bloret.net/SF/sparkles?color=black" style="width:20px; height:20px;">
+                                Bloriko 的今日总结
+                            </div>
+                            <div class="post-content" style="font-size: 15px; line-height: 1.6;">
+                                ${summary.content}
+                            </div>
+                        `;
+                        targetContainer.appendChild(summaryDiv);
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to load summary:", e);
+            }
         }
 
         // 加载用户关注列表
@@ -1294,6 +1460,8 @@
                         <div class="hero-section">
                             <span class="section-date">${todayStr}</span>
                             <div class="section-title">Today</div>
+                            <br>
+                            <div id="ai-summary-placeholder" style="margin-bottom: 30px;"></div>
                             
                             ${pinnedToday.length ? `
                                 <div class="nav-title" style="margin: 30px 0 15px;">📌 全站置顶</div>
@@ -1317,6 +1485,7 @@
                             </div>
                         </div>
                     `;
+                    await renderDailySummary();
                 } else if (pageType === 'all-posts') {
                     const latest = [...allPosts].sort((a, b) => b.time - a.time);
                     container.innerHTML = `
@@ -1465,6 +1634,7 @@
                             </div>
                         </div>
                     `;
+
                 } else {
                     grid.style.display = 'none';
                 }

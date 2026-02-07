@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>获取 AI Token</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        .card {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+
+        code {
+            background: #eee;
+            padding: 2px 5px;
+            border-radius: 4px;
+        }
+
+        pre {
+            background: #333;
+            color: #fff;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+
+        button {
+            cursor: pointer;
+            padding: 10px 20px;
+            font-size: 16px;
+            background: #0078d4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>获取 Bloriko AI 配置信息</h1>
+    <p>此页面帮助你获取用于 config.json 的 <code>ai_user_name</code> 和 <code>ai_user_token</code>。</p>
+
+    <div id="loading">加载中...</div>
+
+    <div id="login-section" class="hidden">
+        <p>你需要先登录 PassPort。</p>
+        <button onclick="location.href='/login'">前往登录</button>
+    </div>
+
+    <div id="token-section" class="hidden">
+        <div class="card">
+            <h3>你的信息</h3>
+            <p><strong>Username (ai_user_name):</strong> <span id="username">-</span></p>
+            <p><strong>Token (ai_user_token):</strong> <span id="token">-</span></p>
+            <hr>
+            <p><small>完整 API返回:</small></p>
+            <pre id="raw-json"></pre>
+        </div>
+        <p><strong>操作步骤：</strong></p>
+        <ol>
+            <li>复制上面的 Token。</li>
+            <li>打开 <code>config.json</code> 文件。</li>
+            <li>将 Token 粘贴到 <code>ai_user_token</code> 字段。</li>
+            <li>确保 <code>ai_user_name</code> 也是正确的。</li>
+            <li><strong>重启服务器</strong>。</li>
+        </ol>
+        <a href="/">返回首页</a>
+    </div>
+
+    <script>
+        fetch('/api/user')
+            .then(res => res.json())
+            .then(user => {
+                document.getElementById('loading').style.display = 'none';
+                if (user) {
+                    document.getElementById('token-section').style.display = 'block';
+                    document.getElementById('username').textContent = user.username || user.name || '未知';
+                    // 尝试查找可能的 token 字段
+                    const token = user.token || user.apptoken || user.accessToken || "未找到 Token 字段";
+                    document.getElementById('token').textContent = token;
+                    document.getElementById('raw-json').textContent = JSON.stringify(user, null, 2);
+                } else {
+                    document.getElementById('login-section').style.display = 'block';
+                }
+            })
+            .catch(err => {
+                document.getElementById('loading').textContent = '加载失败: ' + err.message;
+            });
+    </script>
+</body>
+
+</html>

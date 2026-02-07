@@ -67,6 +67,11 @@ function initUserDir() {
 initDataDir();
 const userDir = initUserDir();
 
+// 路由: 辅助工具页面
+app.get('/get-token.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'get-token.html'));
+});
+
 // 路由: 资源 public/res/*
 app.get('/res/*', (req, res) => {
     const resourcePath = path.join(__dirname, 'public', req.path);
@@ -825,28 +830,103 @@ app.post('/api/post/pin', (req, res) => {
     res.json({ success: true });
 });
 
-// 排行榜 API
+// 排行榜 API (支持类型与时间筛选)
 app.get('/api/leaderboard', (req, res) => {
-    const users = {};
-    const boards = fs.readdirSync(config.data_dir);
-    boards.forEach(b => {
-        const bp = path.join(config.data_dir, b);
-        if (!fs.statSync(bp).isDirectory()) return;
-        fs.readdirSync(bp).forEach(s => {
-            const sp = path.join(bp, s);
+    const { type, range, start, end } = req.query; // type: post, board, section, user; range: 7, 14, 30, 90, 365, all, custom
+    let startTime = 0;
+    const now = Date.now();
+
+    if (range === 'custom') {
+        startTime = parseInt(start) || 0;
+    } else if (range !== 'all' && range) {
+        startTime = now - parseInt(range) * 24 * 60 * 60 * 1000;
+    }
+
+    const endTime = (range === 'custom' && end) ? parseInt(end) : now;
+
+    const stats = {
+        users: {},
+        boards: {},
+        sections: {},
+        posts: []
+    };
+
+    const boardDirs = fs.readdirSync(config.data_dir);
+    boardDirs.forEach(board => {
+        const bp = path.join(config.data_dir, board);
+        if (!fs.statSync(bp).isDirectory() || board === '..') return;
+
+        if (!stats.boards[board]) stats.boards[board] = { name: board, posts: 0, likes: 0 };
+
+        fs.readdirSync(bp).forEach(section => {
+            const sp = path.join(bp, section);
             if (!fs.statSync(sp).isDirectory()) return;
+
+            const secKey = `${board}/${section}`;
+            if (!stats.sections[secKey]) stats.sections[secKey] = { name: section, board, posts: 0, likes: 0 };
+
             fs.readdirSync(sp).forEach(f => {
                 if (!f.endsWith('.json') || f === 'owner.json') return;
-                const p = JSON.parse(fs.readFileSync(path.join(sp, f)));
-                if (!users[p.author]) users[p.author] = { posts: 0, likes: 0 };
-                users[p.author].posts++;
-                users[p.author].likes += (p.likes?.length || 0);
+                try {
+                    const p = JSON.parse(fs.readFileSync(path.join(sp, f)));
+                    if (p.time >= startTime && p.time <= endTime) {
+                        const likesCount = (p.likes?.length || 0);
+
+                        // 用户统计
+                        if (!stats.users[p.author]) stats.users[p.author] = { username: p.author, posts: 0, likes: 0 };
+                        stats.users[p.author].posts++;
+                        stats.users[p.author].likes += likesCount;
+
+                        // 板块统计
+                        stats.boards[board].posts++;
+                        stats.boards[board].likes += likesCount;
+
+                        // 分区统计
+                        stats.sections[secKey].posts++;
+                        stats.sections[secKey].likes += likesCount;
+
+                        // 帖子统计
+                        stats.posts.push({
+                            title: p.title,
+                            author: p.author,
+                            board,
+                            section,
+                            filename: f,
+                            likes: likesCount,
+                            time: p.time
+                        });
+                    }
+                } catch (e) { }
             });
         });
     });
-    const result = Object.entries(users).map(([name, s]) => ({ username: name, ...s }))
-        .sort((a, b) => (b.likes * 2 + b.posts) - (a.likes * 2 + a.posts)).slice(0, 10);
-    res.json(result);
+
+    let result = [];
+    if (type === 'user') {
+        result = Object.values(stats.users).sort((a, b) => (b.likes * 2 + b.posts) - (a.likes * 2 + a.posts));
+    } else if (type === 'board') {
+        result = Object.values(stats.boards).sort((a, b) => (b.likes * 2 + b.posts) - (a.likes * 2 + a.posts));
+    } else if (type === 'section') {
+        result = Object.values(stats.sections).sort((a, b) => (b.likes * 2 + b.posts) - (a.likes * 2 + a.posts));
+    } else { // post
+        result = stats.posts.sort((a, b) => b.likes - a.likes);
+    }
+
+    res.json(result.slice(0, 50));
+});
+
+// 全站管理：调整板块顺序
+app.post('/api/admin/reorder-boards', (req, res) => {
+    if (!req.session.user || !config.super_admins?.includes(req.session.user.username)) {
+        return res.status(403).json({ error: '权限不足' });
+    }
+    const { newOrder } = req.body;
+    if (!Array.isArray(newOrder)) return res.status(400).json({ error: '无效数据' });
+
+    // 我们将顺序存储在一个独立的文件中，或者直接更新 config.json (这里选择独立文件更安全)
+    const orderFile = path.join(config.data_dir, 'boards_order.json');
+    fs.writeFileSync(orderFile, JSON.stringify(newOrder));
+    res.json({ success: true });
 });
 
 // 保存用户设置
@@ -910,6 +990,173 @@ app.post('/api/upload-proxy', upload.single('image'), async (req, res) => {
     }
 });
 
+// --- AI 每日总结功能 ---
+
+// 获取每日数据
+function gatherDailyData() {
+    let allPosts = [];
+    let users = {};
+    const boards = fs.readdirSync(config.data_dir);
+
+    // 遍历所有帖子
+    boards.forEach(board => {
+        const boardPath = path.join(config.data_dir, board);
+        if (!fs.statSync(boardPath).isDirectory()) return;
+        fs.readdirSync(boardPath).forEach(section => {
+            const sectionPath = path.join(boardPath, section);
+            if (!fs.statSync(sectionPath).isDirectory()) return;
+            fs.readdirSync(sectionPath).forEach(file => {
+                if (!file.endsWith('.json') || file === 'owner.json') return;
+                try {
+                    const content = JSON.parse(fs.readFileSync(path.join(sectionPath, file), 'utf8'));
+                    content.board = board;
+                    content.section = section;
+                    allPosts.push(content);
+
+                    // 统计用户数据
+                    if (!users[content.author]) users[content.author] = { posts: 0, likes: 0 };
+                    users[content.author].posts++;
+                    users[content.author].likes += (content.likes?.length || 0);
+                } catch (e) { }
+            });
+        });
+    });
+
+    const todayStart = new Date().setHours(0, 0, 0, 0);
+    const todayPosts = allPosts.filter(p => p.time >= todayStart);
+
+    // 1. 全站置顶 (level 'today')
+    const pinned = allPosts.filter(p => p.pinned && p.pinned.level === 'today' && (p.pinned.expireAt === -1 || p.pinned.expireAt > Date.now()));
+
+    // 2. 热门推荐 (按时间倒序取最近24小时，按点赞排序)
+    // 为简化，取全局最热前5
+    const hot = [...allPosts].sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0)).slice(0, 5);
+
+    // 3. 最新发布 (按时间倒序取前5)
+    const latest = [...allPosts].sort((a, b) => b.time - a.time).slice(0, 5);
+
+    // 4. 排行榜
+    const leaderboard = Object.entries(users)
+        .map(([name, s]) => ({ username: name, ...s }))
+        .sort((a, b) => (b.likes * 2 + b.posts) - (a.likes * 2 + a.posts))
+        .slice(0, 5);
+
+    return {
+        date: new Date().toLocaleDateString(),
+        pinned: pinned.map(p => p.title),
+        hot: hot.map(p => `${p.title} (❤️${p.likes?.length || 0})`),
+        latest: latest.map(p => `${p.title} (by ${p.author})`),
+        leaderboard: leaderboard.map(u => `${u.username} (🔥${u.likes * 2 + u.posts})`)
+    };
+}
+
+// 生成每日总结
+async function generateDailySummary() {
+    console.log("Starting daily summary generation...");
+    const data = gatherDailyData();
+    const prompt = `
+    你是 Bloriko，Bloret BBS 的 AI 助手。请根据以下今日论坛数据，生成一份"今日总结"。
+    
+    数据如下：
+    - 全站置顶：${data.pinned.join(', ') || '无'}
+    - 热门推荐：${data.hot.join(', ') || '暂无'}
+    - 最新发布：${data.latest.join(', ') || '暂无'}
+    - 活跃榜单：${data.leaderboard.join(', ') || '暂无'}
+    
+    不要使用 Markdown 标题，直接给出文本内容。
+    `;
+
+    try {
+        // 使用独立配置的 ai_host (默认为 http://localhost:20000) 避免混用 passport_host 导致协议/端口错误
+        const aiHost = config.ai_host || "http://localhost:20000";
+
+        const response = await axios.post(`${aiHost}/api/ai`, {
+            pause: false,
+            model: "Bloriko",
+            OauthApp: {
+                app_id: config.app_id,
+                app_secret: config.app_secret
+            },
+            user: {
+                name: config.ai_user_name || "System_Bot",
+                token: config.ai_user_token || ""
+            },
+            context: [
+                { role: "user", content: prompt }
+            ]
+        });
+
+        if (response.data.status) {
+            const summaryData = {
+                date: new Date().toDateString(),
+                content: response.data.content,
+                generatedAt: Date.now()
+            };
+            fs.writeFileSync(path.join(config.data_dir, 'daily_summary.json'), JSON.stringify(summaryData));
+            console.log("Daily summary generated successfully.");
+        } else {
+            console.error("AI Generation Failed:", response.data.error);
+        }
+    } catch (e) {
+        console.error("Summary Generation Error:", e.message);
+        if (e.response) console.error("API Response:", e.response.data);
+    }
+}
+
+// API: 获取每日总结
+app.get('/api/summary', (req, res) => {
+    const summaryPath = path.join(config.data_dir, 'daily_summary.json');
+    if (fs.existsSync(summaryPath)) {
+        res.json(JSON.parse(fs.readFileSync(summaryPath, 'utf8')));
+    } else {
+        res.json(null);
+    }
+});
+
+// 测试 API: 手动触发生成 (仅限超管 或 token为空时调试用)
+// app.get('/api/summary/generate', (req, res) => {
+//     if (!config.ai_user_token) return res.status(500).json({ error: "Missing AI Token in config" });
+//     // 异步执行
+//     generateDailySummary();
+//     res.json({ success: true, message: "Started generation task" });
+// });
+
+// 每日定时任务 (简单的 setInterval 实现)
+setInterval(() => {
+    const now = new Date();
+    // 每天 08:00 运行
+    if (now.getHours() === 8 && now.getMinutes() === 0) {
+        const summaryPath = path.join(config.data_dir, 'daily_summary.json');
+        let shouldRun = true;
+
+        // 检查今天是否已经运行过
+        if (fs.existsSync(summaryPath)) {
+            const last = JSON.parse(fs.readFileSync(summaryPath));
+            if (last.date === now.toDateString()) shouldRun = false;
+        }
+
+        if (shouldRun) {
+            generateDailySummary();
+        }
+    }
+}, 60000); // Check every minute
+
 app.listen(config.port, () => {
     console.log(`Bloret BBS running at http://localhost:${config.port}`);
+    console.log("Terminal Commands Enabled: Type 'Bloriko Daily' to manually generate summary.");
+});
+
+// 处理控制台命令
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (data) => {
+    const command = data.trim();
+    if (command === 'Bloriko Daily') {
+        console.log("Manual trigger: Generating daily summary...");
+        generateDailySummary();
+    } else if (command === 'help' || command === '?') {
+        console.log("\n--- Available Commands ---");
+        console.log("Bloriko Daily  - Manually trigger AI daily summary generation");
+        console.log("help / ?       - Show this help message");
+        console.log("---------------------------\n");
+    }
 });
