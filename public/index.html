@@ -616,7 +616,7 @@
             <div class="bubble-item" onclick="showModal('board-modal')">
                 <span class="bubble-icon"><img src="https://img.bloret.net/SF/plus.app.fill?color=black" class="sf-icon"></span> 新建板块
             </div>
-            <div class="bubble-item" id="menu-new-section" onclick="showModal('section-modal')" style="display: none;">
+            <div class="bubble-item" id="menu-new-section" onclick="showSectionModal()" style="display: none;">
                 <span class="bubble-icon"><img src="https://img.bloret.net/SF/folder.badge.plus.fill?color=black" class="sf-icon"></span> 新建分区
             </div>
             <div class="bubble-item" onclick="showPostModal()">
@@ -646,7 +646,11 @@
     <!-- 新建分区模态框 -->
     <div class="modal" id="section-modal">
         <div class="modal-content">
-            <h2>在 <span id="current-board-name"></span> 新建分区</h2>
+            <h2>新建分区</h2>
+            <div class="form-group">
+                <label>选择所属板块</label>
+                <select id="section-board-select" class="form-control"></select>
+            </div>
             <div class="form-group">
                 <label>分区名称</label>
                 <input type="text" id="section-name" class="form-control" placeholder="如：常见问题">
@@ -2008,18 +2012,60 @@
             } else { Dialog.alert(data.error); }
         }
 
-        function toggleNewMenu() {
+        async function toggleNewMenu() {
             const menu = document.getElementById('new-menu');
-            menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+            const isVisible = menu.style.display === 'flex';
+            
+            if (!isVisible && currentUser) {
+                // 动态检查是否有权新建分区
+                const res = await fetch('/api/user/permissions');
+                const perms = await res.json();
+                const canCreate = perms.isSuperAdmin || perms.ownedBoards.length > 0 || perms.adminBoards.length > 0;
+                document.getElementById('menu-new-section').style.display = canCreate ? 'flex' : 'none';
+            }
+
+            menu.style.display = isVisible ? 'none' : 'flex';
+        }
+
+        async function showSectionModal() {
+            if(!currentUser) return location.href = '/login';
+            document.getElementById('new-menu').style.display = 'none';
+            
+            const res = await fetch('/api/user/permissions');
+            const perms = await res.json();
+            const select = document.getElementById('section-board-select');
+            select.innerHTML = '';
+            
+            let boards = [];
+            if (perms.isSuperAdmin) {
+                // 超管可以看到所有板块（从 boardStructure 获取）
+                boards = Object.keys(boardStructure);
+            } else {
+                // 普通管理人员只能看到自己管理的板块
+                boards = [...new Set([...perms.ownedBoards, ...perms.adminBoards])];
+            }
+
+            if (boards.length === 0) return Dialog.alert("您没有在任何板块创建分区的权限");
+
+            boards.forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b;
+                opt.innerText = b;
+                select.appendChild(opt);
+            });
+
+            // 自动选中当前正在查看的板块
+            if (currentActiveBoard && boards.includes(currentActiveBoard)) {
+                select.value = currentActiveBoard;
+            }
+
+            document.getElementById('section-modal').classList.add('active');
         }
 
         async function showModal(id) {
             if(!currentUser) return location.href = '/login';
             document.getElementById('new-menu').style.display = 'none';
             document.getElementById(id).classList.add('active');
-            if(id === 'section-modal') {
-                document.getElementById('current-board-name').innerText = currentActiveBoard;
-            }
         }
 
         function closeModal(id) {
@@ -2051,14 +2097,20 @@
         }
 
         async function submitSection() {
+            const board = document.getElementById('section-board-select').value;
             const name = document.getElementById('section-name').value;
-            if(!name || !currentActiveBoard) return;
+            if(!name || !board) return;
             const res = await fetch('/api/section', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ board: currentActiveBoard, name })
+                body: JSON.stringify({ board, name })
             });
-            if((await res.json()).success) { location.reload(); } else { alert('创建失败'); }
+            const result = await res.json();
+            if(result.success) { 
+                location.reload(); 
+            } else { 
+                Dialog.alert(result.error || '创建失败'); 
+            }
         }
 
         function updateSectionSelect() {

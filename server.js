@@ -465,14 +465,24 @@ app.post('/api/board/delete', (req, res) => {
     }
 });
 
-// 新建分区 (仅限板块创建者)
+// 新建分区 (支持超级管理员、板块创建者、板块管理员)
 app.post('/api/section', (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: '请先登录' });
     const { board, name } = req.body;
+    const username = req.session.user.username;
+    
     const ownerFile = path.join(config.data_dir, board, 'owner.json');
     if (!fs.existsSync(ownerFile)) return res.status(403).json({ error: '无法验证所有权' });
+    
     const info = JSON.parse(fs.readFileSync(ownerFile, 'utf8'));
-    if (info.owner !== req.session.user.username) return res.status(403).json({ error: '只有板块创建者可以新建分区' });
+    const isSuper = config.super_admins?.includes(username);
+    const isOwner = info.owner === username;
+    const isAdmin = info.admins?.includes(username);
+
+    if (!isSuper && !isOwner && !isAdmin) {
+        return res.status(403).json({ error: '只有超级管理员、板块创建者或板块管理员可以新建分区' });
+    }
+
     const sectionPath = path.join(config.data_dir, board, name);
     if (fs.existsSync(sectionPath)) return res.status(400).json({ error: '分区已存在' });
     fs.mkdirSync(sectionPath, { recursive: true });
