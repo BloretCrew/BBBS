@@ -514,6 +514,49 @@
             background: var(--primary-color);
             color: white;
         }
+
+        /* 自定义 Markdown 控件样式 */
+        .md-widget-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(0, 120, 212, 0.1);
+            color: var(--primary-color);
+            border-radius: 12px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            margin: 5px;
+            transition: all 0.2s;
+        }
+        .md-widget-btn:hover { background: rgba(0, 120, 212, 0.2); transform: translateY(-2px); }
+        
+        .vote-card {
+            background: #f9f9f9;
+            border: 1px solid #eee;
+            border-radius: 16px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .vote-option {
+            margin: 10px 0;
+            padding: 12px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        .vote-progress {
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            background: rgba(0, 120, 212, 0.1);
+            z-index: 0;
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .vote-text { position: relative; z-index: 1; display: flex; justify-content: space-between; font-weight: 500; }
     </style>
 </head>
 <body>
@@ -535,10 +578,10 @@
         <div class="nav-group">
             <div class="nav-title">发现</div>
             <a href="#" class="nav-item active" onclick="loadPage('today')">
-                <span class="nav-icon"><img src="https://img.bloret.net/SF/calendar?color=gray" class="sf-icon"></span> Today
+                <span class="nav-icon"><img src="https://img.bloret.net/SF/calendar?color=white" class="sf-icon"></span> Today
             </a>
             <a href="#" class="nav-item" onclick="loadPage('all-posts')">
-                <span class="nav-icon"><img src="https://img.bloret.net/SF/sparkles?color=gray" class="sf-icon"></span> 最新发布
+                <span class="nav-icon"><img src="https://img.bloret.net/SF/sparkles?color=white" class="sf-icon"></span> 最新发布
             </a>
         </div>
 
@@ -554,9 +597,9 @@
         </div>
 
         <div id="user-bubble-menu" class="bubble-menu" style="display: none; bottom: 80px; left: 15px; min-width: 220px; transform-origin: bottom left;">
-            <div class="bubble-item" onclick="showUserSettings()"><span class="bubble-icon"><img src="https://img.bloret.net/SF/gearshape?color=black" class="sf-icon"></span> 用户设置</div>
-            <div class="bubble-item" onclick="showUserPermissions()"><span class="bubble-icon"><img src="https://img.bloret.net/SF/shield?color=black" class="sf-icon"></span> 显示所有权限</div>
-            <div class="bubble-item" onclick="window.open('${config.passport_host}')"><span class="bubble-icon"><img src="https://img.bloret.net/SF/person.badge.key?color=black" class="sf-icon"></span> Bloret PassPort</div>
+            <div class="bubble-item" onclick="showUserSettings()"><span class="bubble-icon"><img src="https://img.bloret.net/SF/gearshape.fill?color=black" class="sf-icon"></span> 用户设置</div>
+            <div class="bubble-item" onclick="showUserPermissions()"><span class="bubble-icon"><img src="https://img.bloret.net/SF/shield.fill?color=black" class="sf-icon"></span> 显示所有权限</div>
+            <div class="bubble-item" onclick="window.open('${config.passport_host}')"><span class="bubble-icon"><img src="https://img.bloret.net/SF/person.badge.key.fill?color=black" class="sf-icon"></span> Bloret PassPort</div>
             <div style="height:1px; background:rgba(0,0,0,0.05); margin:5px 0;"></div>
             <div class="bubble-item" style="color:#ff3b30;" onclick="location.href='/logout'"><span class="bubble-icon"><img src="https://img.bloret.net/SF/door.right.hand.open?color=red" class="sf-icon"></span> 退出登录</div>
         </div>
@@ -571,13 +614,13 @@
     <div style="position: fixed; bottom: 30px; right: 30px; z-index: 500;">
         <div id="new-menu" class="bubble-menu" style="display: none; bottom: 80px; right: 0; min-width: 180px;">
             <div class="bubble-item" onclick="showModal('board-modal')">
-                <span class="bubble-icon">🆕</span> 新建板块
+                <span class="bubble-icon"><img src="https://img.bloret.net/SF/plus.app.fill?color=black" class="sf-icon"></span> 新建板块
             </div>
             <div class="bubble-item" id="menu-new-section" onclick="showModal('section-modal')" style="display: none;">
-                <span class="bubble-icon">📂</span> 新建分区
+                <span class="bubble-icon"><img src="https://img.bloret.net/SF/folder.badge.plus.fill?color=black" class="sf-icon"></span> 新建分区
             </div>
             <div class="bubble-item" onclick="showPostModal()">
-                <span class="bubble-icon">📝</span> 发布帖子
+                <span class="bubble-icon"><img src="https://img.bloret.net/SF/square.and.pencil?color=black" class="sf-icon"></span> 发布帖子
             </div>
         </div>
         <button onclick="toggleNewMenu()" class="fluent-card" style="width: 60px; height: 60px; padding: 0; background: var(--primary-color); color: white; font-size: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 20px rgba(0,120,215,0.4);">
@@ -801,12 +844,56 @@
         let currentActiveBoard = null;
         let userFollows = { boards: [], sections: [] };
 
+        // 核心路由解析器：根据 URL Hash 决定显示哪个页面
+        async function handleRouting() {
+            const hash = window.location.hash.substring(1);
+            
+            // 基础页面
+            if (!hash || hash === 'today') return renderTodayPage();
+            if (hash === 'all-posts') return renderAllPostsPage();
+            if (hash === 'leaderboard') return renderLeaderboardPage();
+            
+            const parts = hash.split('/');
+            const type = parts[0];
+
+            // 板块页: #board/板块名
+            if (type === 'board' && parts[1]) {
+                return renderBoardPage(decodeURIComponent(parts[1]));
+            }
+            // 分区页: #section/板块名/分区名
+            if (type === 'section' && parts[1] && parts[2]) {
+                return renderSectionPage(decodeURIComponent(parts[1]), decodeURIComponent(parts[2]));
+            }
+            // 帖子页: #post/板块名/分区名/文件名
+            if (type === 'post' && parts[1] && parts[2] && parts[3]) {
+                return renderPostPage(decodeURIComponent(parts[1]), decodeURIComponent(parts[2]), decodeURIComponent(parts[3]));
+            }
+            
+            // 默认回退到 Today
+            window.location.hash = 'today';
+        }
+
+        // 统一导航函数：只改变 Hash，具体的渲染由 handleRouting 负责
+        function navigateTo(hash) {
+            window.location.hash = hash;
+        }
+
         // 初始化
         document.addEventListener('DOMContentLoaded', async () => {
             await checkLogin();
             if(currentUser) await loadFollows();
             await loadStructure();
-            loadPage('today');
+            
+            // 监听 Hash 变化
+            window.addEventListener('hashchange', handleRouting);
+            // 首次进入页面执行一次路由
+            handleRouting();
+
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.search-container')) {
+                    document.getElementById('search-suggest-box').style.display = 'none';
+                }
+            });
 
             // 点击页面其他地方关闭搜索下拉框
             document.addEventListener('click', (e) => {
@@ -882,7 +969,11 @@
             }
         }
 
-        async function loadLeaderboard() {
+        function loadLeaderboard() {
+            navigateTo('leaderboard');
+        }
+
+        async function renderLeaderboardPage() {
             await transitionTo(async () => {
                 const container = document.getElementById('main-container');
                 const res = await fetch('/api/leaderboard');
@@ -910,7 +1001,7 @@
             // 1. 排行榜入口
             const discoverItem = document.createElement('div');
             discoverItem.className = 'nav-item';
-            discoverItem.innerHTML = '<span class="nav-icon"><img src="https://img.bloret.net/SF/trophy?color=gray" class="sf-icon"></span> 排行榜';
+            discoverItem.innerHTML = '<span class="nav-icon"><img src="https://img.bloret.net/SF/trophy.fill?color=white" class="sf-icon"></span> 排行榜';
             discoverItem.onclick = loadLeaderboard;
             boardListContainer.appendChild(discoverItem);
             
@@ -933,7 +1024,7 @@
                     const [b, sec] = s.split('/');
                     const el = document.createElement('div');
                     el.className = 'nav-item';
-                    el.innerHTML = `<span class="nav-icon"><img src="https://img.bloret.net/SF/mappin.and.ellipse?color=gray" class="sf-icon"></span> ${sec}`;
+                    el.innerHTML = `<span class="nav-icon"><img src="https://img.bloret.net/SF/mappin.and.ellipse?color=white" class="sf-icon"></span> ${sec}`;
                     el.onclick = () => loadPosts(b, sec);
                     boardListContainer.appendChild(el);
                 });
@@ -948,12 +1039,10 @@
             for (const [board, sections] of Object.entries(boardStructure)) {
                 const boardEl = document.createElement('div');
                 boardEl.className = 'nav-item';
-                boardEl.innerHTML = `<span class="nav-icon"><img src="https://img.bloret.net/SF/folder?color=gray" class="sf-icon"></span> ${board}`;
+                boardEl.innerHTML = `<span class="nav-icon"><img src="https://img.bloret.net/SF/folder.fill?color=white" class="sf-icon"></span> ${board}`;
                 boardEl.onclick = (e) => {
                     loadBoard(board);
                     toggleSections(board, true);
-                    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-                    boardEl.classList.add('active');
                 };
                 boardListContainer.appendChild(boardEl);
 
@@ -1010,9 +1099,19 @@
             `;
         }
 
-        async function loadPage(pageType) {
+        function loadPage(pageType) {
+            navigateTo(pageType);
+        }
+
+        async function renderTodayPage() { renderGeneralPage('today'); }
+        async function renderAllPostsPage() { renderGeneralPage('all-posts'); }
+
+        async function renderGeneralPage(pageType) {
             currentView = pageType;
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            // 高亮侧边栏
+            const nav = document.querySelector(`.nav-item[onclick*="loadPage('${pageType}')"]`);
+            if(nav) nav.classList.add('active');
 
             await transitionTo(async () => {
                 const container = document.getElementById('main-container');
@@ -1074,7 +1173,11 @@
             });
         }
 
-        async function loadBoard(board) {
+        function loadBoard(board) {
+            navigateTo(`board/${encodeURIComponent(board)}`);
+        }
+
+        async function renderBoardPage(board) {
             currentActiveBoard = board;
             await transitionTo(async () => {
                 const container = document.getElementById('main-container');
@@ -1148,7 +1251,11 @@
             });
         }
 
-        async function loadPosts(board, section) {
+        function loadPosts(board, section) {
+            navigateTo(`section/${encodeURIComponent(board)}/${encodeURIComponent(section)}`);
+        }
+
+        async function renderSectionPage(board, section) {
             currentActiveBoard = board;
             await transitionTo(async () => {
                 const container = document.getElementById('main-container');
@@ -1223,14 +1330,14 @@
                     const isSecPinned = isPinned(post, 'section');
                     item.innerHTML = `
                         <div class="list-icon">
-                            <img src="https://img.bloret.net/SF/${isSecPinned ? 'pin.fill' : 'square.and.pencil'}?color=gray" class="sf-icon" style="width:24px; height:24px;">
+                            <img src="https://img.bloret.net/SF/${isSecPinned ? 'pin.fill' : 'text.document'}?color=white" class="sf-icon" style="width:24px; height:24px;">
                         </div>
                         <div class="list-details">
                             <div class="list-title">${isSecPinned ? '<span style="color:var(--primary-color)">[置顶]</span> ' : ''}${post.title}</div>
-                            <div class="list-subtitle">${post.author} • ${post.likes?.length || 0} <img src="https://img.bloret.net/SF/hand.thumbsup.fill?color=gray" class="sf-icon" style="width:12px; height:12px; margin-bottom:2px;"></div>
+                            <div class="list-subtitle">${post.author} • ${post.likes?.length || 0} <img src="https://img.bloret.net/SF/hand.thumbsup.fill?color=white" class="sf-icon" style="width:12px; height:12px; margin-bottom:2px;"></div>
                         </div>
                         <div style="display:flex; gap:5px;">
-                            ${canManage ? `<button class="btn-get" style="color:red;" id="del-btn-${post.filename.replace('.','-')}">🗑️</button>` : ''}
+                            ${canManage ? `<button class="btn-get" style="color:red;" id="del-btn-${post.filename.replace('.','-')}"><img src="https://img.bloret.net/SF/trash.fill?color=red" class="sf-icon"></button>` : ''}
                             <button class="btn-get">查看</button>
                         </div>`;
                     list.appendChild(item);
@@ -1350,7 +1457,11 @@
             };
         }
 
-        async function showPostDetailWrapper(filename, board, section) {
+        function showPostDetailWrapper(filename, board, section) {
+            navigateTo(`post/${encodeURIComponent(board)}/${encodeURIComponent(section)}/${encodeURIComponent(filename)}`);
+        }
+
+        async function renderPostPage(board, section, filename) {
             const res = await fetch(`/api/posts?board=${encodeURIComponent(board)}&section=${encodeURIComponent(section)}`);
             const posts = await res.json();
             const post = posts.find(p => p.filename === filename);
@@ -1378,7 +1489,46 @@
                 const perm = getPermLevel(currentUser?.username, board, section);
                 const canEdit = currentUser && (currentUser.username === post.author || perm >= PERMS.SEC_ADMIN);
 
-                const htmlContent = marked.parse(post.content);
+                let htmlContent = marked.parse(post.content);
+                
+                // --- 自定义 Markdown 规则解析开始 ---
+                
+                // 1. 点赞、分享、发帖按钮 (修复了 querySelector 选取第一个按钮导致触发置顶的问题)
+                htmlContent = htmlContent.replace(/\(!#点赞按钮\)/g, `<button class="md-widget-btn" onclick="const b=this.closest('.post-detail-container').querySelector('.like-action-btn'); if(b) b.click();"><img src="https://img.bloret.net/SF/heart.fill?color=%230078d4" class="sf-icon"> 为此帖子点赞</button>`);
+                htmlContent = htmlContent.replace(/\(!#分享按钮\)/g, `<button class="md-widget-btn" onclick="const b=this.closest('.post-detail-container').querySelector('.share-action-btn'); if(b) b.click();"><img src="https://img.bloret.net/SF/square.and.arrow.up?color=%230078d4" class="sf-icon"> 将这篇帖子分享给好友</button>`);
+                htmlContent = htmlContent.replace(/\(!#发布帖子按钮\)/g, `<button class="md-widget-btn" onclick="showPostModal()"><img src="https://img.bloret.net/SF/plus.circle.fill?color=%230078d4" class="sf-icon"> 发布帖子</button>`);
+                
+                // 2. 前往板块、分区、帖子按钮
+                htmlContent = htmlContent.replace(/\(!#前往板块按钮\)\((.*?)\)/g, (m, b) => `<button class="md-widget-btn" onclick="loadBoard('${b}')"><img src="https://img.bloret.net/SF/arrow.right.circle.fill?color=%230078d4" class="sf-icon"> 前往板块：${b}</button>`);
+                htmlContent = htmlContent.replace(/\(!#前往分区按钮\)\((.*?)\)\((.*?)\)/g, (m, b, s) => `<button class="md-widget-btn" onclick="loadPosts('${b}', '${s}')"><img src="https://img.bloret.net/SF/mappin.and.ellipse?color=%230078d4" class="sf-icon"> 前往分区：${s}</button>`);
+                htmlContent = htmlContent.replace(/\(!#前往帖子按钮\)\((.*?)\)\((.*?)\)\((.*?)\)/g, (m, b, s, f) => `<button class="md-widget-btn" onclick="showPostDetailWrapper('${f}', '${b}', '${s}')"><img src="https://img.bloret.net/SF/text.document.fill?color=%230078d4" class="sf-icon"> 阅读帖子：${f}</button>`);
+                
+                // 3. 投票组件 (解析 marked 渲染后的 code block)
+                htmlContent = htmlContent.replace(/<pre><code class="language-投票">([\s\S]*?)<\/code><\/pre>/g, (match, optionsText) => {
+                    const options = optionsText.trim().split('\n').map(o => o.trim());
+                    const votes = post.votes || {};
+                    const totalVotes = Object.values(votes).reduce((acc, curr) => acc + curr.length, 0);
+                    
+                    const optionsHtml = options.map(opt => {
+                        const count = (votes[opt] || []).length;
+                        const percent = totalVotes === 0 ? 0 : Math.round((count / totalVotes) * 100);
+                        const hasVoted = currentUser && Object.values(votes).some(v => v.includes(currentUser.username));
+                        
+                        return `
+                            <div class="vote-option" onclick="handleVote('${board}','${section}','${post.filename}','${opt}')">
+                                <div class="vote-progress" style="width: ${percent}%"></div>
+                                <div class="vote-text">
+                                    <span>${opt}</span>
+                                    <span>${percent}% (${count} 票)</span>
+                                </div>
+                            </div>`;
+                    }).join('');
+
+                    return `<div class="vote-card"><h3>📊 投票调查</h3>${optionsHtml}<small style="color:#888;">共有 ${totalVotes} 人参与投票</small></div>`;
+                });
+
+                // --- 自定义 Markdown 规则解析结束 ---
+
                 const isLiked = currentUser && post.likes?.includes(currentUser.username);
                 
                 // 合并时间轴数据：历史记录 + 评论
@@ -1409,11 +1559,12 @@
                             <button id="pin-btn" class="action-btn" style="display:none;" onclick="handlePinPrompt('${board}','${section}','${post.filename}')">
                                 <img src="https://img.bloret.net/SF/pin?color=black" class="sf-icon" style="margin-right:6px;"> 置顶
                             </button>
-                            <button class="action-btn ${isLiked ? 'active' : ''}" onclick="toggleLike('${board}', '${section}', '${post.filename}', this)">
+                            <!-- 加上了 like-action-btn 和 share-action-btn 类名用于 Markdown 按钮定位 -->
+                            <button class="action-btn like-action-btn ${isLiked ? 'active' : ''}" onclick="toggleLike('${board}', '${section}', '${post.filename}', this)">
                                 <img src="https://img.bloret.net/SF/heart${isLiked ? '.fill' : ''}?color=${isLiked ? 'red' : 'black'}" class="sf-icon" style="margin-right:6px;"> 
                                 <span class="like-count">${post.likes?.length || 0}</span>
                             </button>
-                            <button class="action-btn share" onclick="sharePost(this)">
+                            <button class="action-btn share-action-btn share" onclick="sharePost('${board}','${section}','${post.filename}',this)">
                                 <img src="https://img.bloret.net/SF/square.and.arrow.up?color=black" class="sf-icon" style="margin-right:6px;"> 分享
                             </button>
                         </div>
@@ -1434,17 +1585,19 @@
                                             </div>
                                         </div>`;
                                 } else {
-                                    let iconName = "circle", iconColor = "gray", text = "";
+                                    let iconName = "circle", iconColor = "white", text = "";
                                     let clickAttr = "";
                                     switch(item.type) {
                                         case 'publish': iconName = "paperplane.fill"; iconColor = "%230078d4"; text = `<b>${item.user}</b> 发布了这篇帖子`; break;
                                         case 'edit': 
-                                            iconName = "pencil"; text = `<b>${item.user}</b> 编辑了内容`; 
+                                            iconName = "pencil.line"; text = `<b>${item.user}</b> 编辑了内容`; 
                                             clickAttr = `onclick="showOldVersion('${btoa(unescape(encodeURIComponent(item.oldContent)))}')" style="cursor:pointer; text-decoration:underline;"`;
                                             break;
-                                        case 'move': iconName = "shippingbox.fill"; text = `<b>${item.user}</b> 将帖子从 ${item.from} 移动到 ${item.to}`; break;
+                                        case 'move': iconName = "rectangle.2.swap"; text = `<b>${item.user}</b> 将帖子从 ${item.from} 移动到 ${item.to}`; break;
                                         case 'pin': iconName = "pin.fill"; iconColor = "%23FF9500"; text = `<b>${item.user}</b> 置顶了帖子 (${item.level})`; break;
                                         case 'like': iconName = "heart.fill"; iconColor = "red"; text = `<b>${item.user}</b> 点赞了帖子`; break;
+                                        case 'vote': iconName = "checkmark.circle.fill"; iconColor = "green"; text = `<b>${item.user}</b> 投给了 <b>${item.option}</b>`; break;
+                                        case 'share': iconName = "square.and.arrow.up.fill"; iconColor = "blue"; text = `<b>${item.user}</b> 分享了这篇帖子`; break;
                                     }
                                     return `
                                         <div style="position:relative; margin-bottom: 20px; font-size:14px; color:#586069; display:flex; align-items:center;">
@@ -1513,6 +1666,21 @@
             const b = document.getElementById('move-board-select').value;
             const sSelect = document.getElementById('move-section-select');
             sSelect.innerHTML = boardStructure[b].map(s => `<option value="${s}">${s}</option>`).join('');
+        }
+
+        async function handleVote(board, section, filename, option) {
+            if(!currentUser) return Dialog.alert('请先登录后投票');
+            const res = await fetch('/api/post/vote', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ board, section, filename, option })
+            });
+            const result = await res.json();
+            if(result.success) {
+                showPostDetailWrapper(filename, board, section); // 刷新详情页展示结果
+            } else {
+                Dialog.alert(result.error);
+            }
         }
 
         async function submitComment(board, section, filename) {
@@ -1795,14 +1963,22 @@
             } else { Dialog.alert(data.error); }
         }
 
-        async function sharePost(btn) {
+        async function sharePost(board, section, filename, btn) {
             const shareData = { title: document.title, text: '来看看百络谷上的这篇帖子！', url: window.location.href };
+            
+            // 发送分享记录到后端
+            fetch('/api/post/share-record', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ board, section, filename })
+            });
+
             try {
                 if (navigator.share) await navigator.share(shareData);
                 else {
                     await navigator.clipboard.writeText(window.location.href);
                     const original = btn.innerHTML;
-                    btn.innerHTML = '<span>✅</span> 链接已复制';
+                    btn.innerHTML = '<img src="https://img.bloret.net/SF/checkmark?color=green" class="sf-icon"> 已复制';
                     setTimeout(() => btn.innerHTML = original, 2000);
                 }
             } catch (err) { console.log('Share failed', err); }

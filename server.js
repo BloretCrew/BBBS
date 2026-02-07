@@ -275,6 +275,7 @@ app.post('/api/post/like', (req, res) => {
     try {
         const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
         if (!content.likes) content.likes = [];
+        if (!content.history) content.history = [];
         
         const username = req.session.user.username;
         const index = content.likes.indexOf(username);
@@ -283,6 +284,7 @@ app.post('/api/post/like', (req, res) => {
         if (index === -1) {
             content.likes.push(username);
             liked = true;
+            content.history.push({ type: 'like', user: username, time: Date.now() });
         } else {
             content.likes.splice(index, 1);
             liked = false;
@@ -574,6 +576,20 @@ app.post('/api/post/move', (req, res) => {
     res.json({ success: true });
 });
 
+// 分享历史记录 API (新增)
+app.post('/api/post/share-record', (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: '请先登录' });
+    const { board, section, filename } = req.body;
+    const filePath = path.join(config.data_dir, board, section, filename);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: '帖子不存在' });
+
+    const post = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    if (!post.history) post.history = [];
+    post.history.push({ type: 'share', user: req.session.user.username, time: Date.now() });
+    fs.writeFileSync(filePath, JSON.stringify(post));
+    res.json({ success: true });
+});
+
 // 发表评论 API
 app.post('/api/comment/add', (req, res) => {
     if (!req.session.user) return res.status(401).json({ error: '请先登录' });
@@ -593,6 +609,35 @@ app.post('/api/comment/add', (req, res) => {
 
     fs.writeFileSync(filePath, JSON.stringify(post));
     res.json({ success: true });
+});
+
+// 投票 API
+app.post('/api/post/vote', (req, res) => {
+    if (!req.session.user) return res.status(401).json({ error: '请先登录' });
+    const { board, section, filename, option } = req.body;
+    const filePath = path.join(config.data_dir, board, section, filename);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: '帖子不存在' });
+
+    const post = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    if (!post.votes) post.votes = {}; // 结构: { "选项A": ["user1", "user2"], "选项B": [] }
+
+    const username = req.session.user.username;
+    
+    // 检查是否投过票（单选逻辑）
+    for (let opt in post.votes) {
+        if (post.votes[opt].includes(username)) {
+            return res.status(400).json({ error: '您已经投过票了' });
+        }
+    }
+
+    if (!post.votes[option]) post.votes[option] = [];
+    post.votes[option].push(username);
+
+    if (!post.history) post.history = [];
+    post.history.push({ type: 'vote', user: username, time: Date.now(), option: option });
+
+    fs.writeFileSync(filePath, JSON.stringify(post));
+    res.json({ success: true, votes: post.votes });
 });
 
 // --- 完善 API: 全局深度搜索 ---
