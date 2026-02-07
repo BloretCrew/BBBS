@@ -578,10 +578,10 @@
         <div class="nav-group">
             <div class="nav-title">发现</div>
             <a href="#" class="nav-item active" onclick="loadPage('today')">
-                <span class="nav-icon"><img src="https://img.bloret.net/SF/calendar?color=white" class="sf-icon"></span> Today
+                <span class="nav-icon"><img src="https://img.bloret.net/SF/calendar?color=black" class="sf-icon"></span> Today
             </a>
             <a href="#" class="nav-item" onclick="loadPage('all-posts')">
-                <span class="nav-icon"><img src="https://img.bloret.net/SF/sparkles?color=white" class="sf-icon"></span> 最新发布
+                <span class="nav-icon"><img src="https://img.bloret.net/SF/sparkles?color=black" class="sf-icon"></span> 最新发布
             </a>
         </div>
 
@@ -1001,7 +1001,7 @@
             // 1. 排行榜入口
             const discoverItem = document.createElement('div');
             discoverItem.className = 'nav-item';
-            discoverItem.innerHTML = '<span class="nav-icon"><img src="https://img.bloret.net/SF/trophy.fill?color=white" class="sf-icon"></span> 排行榜';
+            discoverItem.innerHTML = '<span class="nav-icon"><img src="https://img.bloret.net/SF/trophy.fill?color=black" class="sf-icon"></span> 排行榜';
             discoverItem.onclick = loadLeaderboard;
             boardListContainer.appendChild(discoverItem);
             
@@ -1024,7 +1024,7 @@
                     const [b, sec] = s.split('/');
                     const el = document.createElement('div');
                     el.className = 'nav-item';
-                    el.innerHTML = `<span class="nav-icon"><img src="https://img.bloret.net/SF/mappin.and.ellipse?color=white" class="sf-icon"></span> ${sec}`;
+                    el.innerHTML = `<span class="nav-icon"><img src="https://img.bloret.net/SF/mappin.and.ellipse?color=black" class="sf-icon"></span> ${sec}`;
                     el.onclick = () => loadPosts(b, sec);
                     boardListContainer.appendChild(el);
                 });
@@ -1039,7 +1039,7 @@
             for (const [board, sections] of Object.entries(boardStructure)) {
                 const boardEl = document.createElement('div');
                 boardEl.className = 'nav-item';
-                boardEl.innerHTML = `<span class="nav-icon"><img src="https://img.bloret.net/SF/folder.fill?color=white" class="sf-icon"></span> ${board}`;
+                boardEl.innerHTML = `<span class="nav-icon"><img src="https://img.bloret.net/SF/folder.fill?color=black" class="sf-icon"></span> ${board}`;
                 boardEl.onclick = (e) => {
                     loadBoard(board);
                     toggleSections(board, true);
@@ -1330,11 +1330,11 @@
                     const isSecPinned = isPinned(post, 'section');
                     item.innerHTML = `
                         <div class="list-icon">
-                            <img src="https://img.bloret.net/SF/${isSecPinned ? 'pin.fill' : 'text.document'}?color=white" class="sf-icon" style="width:24px; height:24px;">
+                            <img src="https://img.bloret.net/SF/${isSecPinned ? 'pin.fill' : 'text.document'}?color=black" class="sf-icon" style="width:24px; height:24px;">
                         </div>
                         <div class="list-details">
                             <div class="list-title">${isSecPinned ? '<span style="color:var(--primary-color)">[置顶]</span> ' : ''}${post.title}</div>
-                            <div class="list-subtitle">${post.author} • ${post.likes?.length || 0} <img src="https://img.bloret.net/SF/hand.thumbsup.fill?color=white" class="sf-icon" style="width:12px; height:12px; margin-bottom:2px;"></div>
+                            <div class="list-subtitle">${post.author} • ${post.likes?.length || 0} <img src="https://img.bloret.net/SF/hand.thumbsup.fill?color=black" class="sf-icon" style="width:12px; height:12px; margin-bottom:2px;"></div>
                         </div>
                         <div style="display:flex; gap:5px;">
                             ${canManage ? `<button class="btn-get" style="color:red;" id="del-btn-${post.filename.replace('.','-')}"><img src="https://img.bloret.net/SF/trash.fill?color=red" class="sf-icon"></button>` : ''}
